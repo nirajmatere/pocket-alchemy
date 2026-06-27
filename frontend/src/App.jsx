@@ -1,5 +1,9 @@
 /* eslint-disable no-unused-vars */
 import { useState, useEffect, useRef } from 'react';
+import BottomNav, { NAV_ITEMS } from './components/BottomNav.jsx';
+import PlayerHUD from './components/PlayerHUD.jsx';
+import { useToast } from './components/ToastProvider.jsx';
+import { hapticLight, hapticMedium, hapticHeavy, hapticSuccess } from './lib/haptics.js';
 
 const HOST_IP = 'https://pocket-alchemy-backend-440102621899.asia-northeast1.run.app'; // Live backend URL
 
@@ -106,10 +110,10 @@ const generateRoomCode = () => {
 
 export default function App() {
   const [clientId] = useState(() => {
-    let id = sessionStorage.getItem('pocket_alchemy_client_id');
+    let id = localStorage.getItem('pocket_alchemy_client_id');
     if (!id) {
       id = 'player_' + Math.random().toString(36).substring(2, 9);
-      sessionStorage.setItem('pocket_alchemy_client_id', id);
+      localStorage.setItem('pocket_alchemy_client_id', id);
     }
     return id;
   });
@@ -152,14 +156,54 @@ export default function App() {
   const [oppAnimClass, setOppAnimClass] = useState('');
   const [popups, setPopups] = useState([]);
 
+  // Enhanced Battle Animation States
+  const [screenShake, setScreenShake] = useState(false);
+  const [abilityFlash, setAbilityFlash] = useState(null); // { element, caster } or null
+  const [healthFlash, setHealthFlash] = useState({ me: false, opp: false });
+  const [cardOverlay, setCardOverlay] = useState({ me: null, opp: null }); // 'damage' | 'heal' | null
+  const [roundIntro, setRoundIntro] = useState(null); // { round } or null
+  const [confetti, setConfetti] = useState(false);
+  const [defeatParticles, setDefeatParticles] = useState(false);
+  const [stancePulse, setStancePulse] = useState(null); // stance id string
+  const [mascotAnimation, setMascotAnimation] = useState('animate-mascot-referee');
+  const [shieldShatter, setShieldShatter] = useState({ me: false, opp: false });
+
   // Stances, advice, global quest progression states
   const [selectedStance, setSelectedStance] = useState('focused'); // 'focused' | 'aggressive' | 'defensive'
   const [hintText, setHintText] = useState(null);
   const [hintLoading, setHintLoading] = useState(false);
   const [profile, setProfile] = useState({ aether_dust: 0, catalysts: 0, unlocked_campaign_stage: 1, badges: [] });
+  const prevProfileRef = useRef(null);
+
+  // Reward popup state
+  const [rewardPopups, setRewardPopups] = useState([]);
+  const [impactBurst, setImpactBurst] = useState(false);
+
+  const toast = useToast();
+
+  const spawnReward = (text) => {
+    const id = Math.random().toString(36).slice(2);
+    setRewardPopups(prev => [...prev, { id, text }]);
+    setTimeout(() => setRewardPopups(prev => prev.filter(r => r.id !== id)), 1900);
+  };
   const [leaderboard, setLeaderboard] = useState([]);
   const [dailyQuest, setDailyQuest] = useState(null);
   const [battleHistory, setBattleHistory] = useState([]);
+
+  // Detect profile currency increases and show reward popups
+  useEffect(() => {
+    const prev = prevProfileRef.current;
+    if (prev) {
+      const dustDiff = profile.aether_dust - prev.aether_dust;
+      const catDiff = profile.catalysts - prev.catalysts;
+      const stageDiff = profile.unlocked_campaign_stage - prev.unlocked_campaign_stage;
+      if (dustDiff > 0) spawnReward(`✨ +${dustDiff} Aether Dust`);
+      if (catDiff > 0) spawnReward(`🧪 +${catDiff} Catalysts`);
+      if (stageDiff > 0) spawnReward(`🏰 Stage ${profile.unlocked_campaign_stage} Unlocked!`);
+    }
+    prevProfileRef.current = profile;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile.aether_dust, profile.catalysts, profile.unlocked_campaign_stage]);
 
   // Alchemical Sage Advisor Chat States
   const [advisorHistory, setAdvisorHistory] = useState([
@@ -212,6 +256,42 @@ export default function App() {
   const [tournamentMatchesCompleted, setTournamentMatchesCompleted] = useState([]);
   const [tournamentRunningLocal, setTournamentRunningLocal] = useState(false);
   const [showRoomCardSelectorModal, setShowRoomCardSelectorModal] = useState(false);
+
+  // Element-to-color mapping for damage popups
+  const getElementDamageColor = (element) => {
+    if (!element) return 'text-red-500 drop-shadow-[0_0_12px_rgba(239,68,68,0.8)]';
+    switch (element) {
+      case 'Fire': return 'text-orange-500 drop-shadow-[0_0_15px_rgba(249,115,22,0.9)]';
+      case 'Water': return 'text-cyan-400 drop-shadow-[0_0_15px_rgba(34,211,238,0.9)]';
+      case 'Lightning': return 'text-fuchsia-400 drop-shadow-[0_0_15px_rgba(232,121,249,0.9)]';
+      case 'Earth': return 'text-emerald-400 drop-shadow-[0_0_15px_rgba(52,211,153,0.9)]';
+      default: return 'text-amber-400 drop-shadow-[0_0_12px_rgba(251,191,36,0.9)]';
+    }
+  };
+
+  const getElementGlowColor = (element) => {
+    if (!element) return 'rgba(157,78,221,0.6)';
+    switch (element) {
+      case 'Fire': return 'rgba(249,115,22,0.6)';
+      case 'Water': return 'rgba(34,211,238,0.6)';
+      case 'Lightning': return 'rgba(232,121,249,0.6)';
+      case 'Earth': return 'rgba(52,211,153,0.6)';
+      default: return 'rgba(251,191,36,0.6)';
+    }
+  };
+
+  const deriveMascotMood = (bs, myFighter, oppFighter) => {
+    if (!bs || !myFighter) return 'animate-mascot-referee';
+    if (bs.game_over) {
+      const isWin = (bs.winner === 'Player 1' && bs.player1_id === clientId) ||
+                    (bs.winner === 'Player 2' && bs.player2_id === clientId) ||
+                    (bs.winner === `Player ${playerNum}`);
+      return isWin ? 'animate-mascot-happy' : 'animate-mascot-sad';
+    }
+    if (oppFighter && oppFighter.current_health < oppFighter.max_health * 0.25) return 'animate-mascot-happy';
+    if (myFighter.current_health < myFighter.max_health * 0.25) return 'animate-mascot-sad';
+    return 'animate-mascot-dance';
+  };
 
   const [animatedLogQueue, setAnimatedLogQueue] = useState([]);
   const [displayedLog, setDisplayedLog] = useState(null);
@@ -294,7 +374,7 @@ export default function App() {
 
   const requestHint = async () => {
     if (profile.aether_dust < 15) {
-      alert("Insufficient Aether Dust! Need 15 to consult Chronos.");
+      toast({ type: 'warn', title: 'Insufficient Dust', message: 'Need 15 Aether Dust to consult Chronos.' });
       return;
     }
     setHintLoading(true);
@@ -310,11 +390,11 @@ export default function App() {
         setHintText(data.hint);
         setProfile(p => ({ ...p, aether_dust: data.remaining_dust }));
       } else {
-        alert(data.detail || "Failed to retrieve tactical advice.");
+        toast({ type: 'error', title: 'Chronos Unavailable', message: data.detail || 'Failed to retrieve tactical advice.' });
       }
     } catch (e) {
       console.error("Hint error:", e);
-      alert("Failed to communicate with Chronos.");
+      toast({ type: 'error', title: 'Connection Failed', message: 'Failed to communicate with Chronos.' });
     } finally {
       setHintLoading(false);
     }
@@ -322,9 +402,9 @@ export default function App() {
 
   const prevBattleStateRef = useRef(null);
 
-  const spawnPopup = (text, type, target) => {
+  const spawnPopup = (text, type, target, element = null, isHeavy = false) => {
     const id = Math.random().toString(36).substring(2, 9);
-    setPopups(prev => [...prev, { id, text, type, target }]);
+    setPopups(prev => [...prev, { id, text, type, target, element, isHeavy }]);
     setTimeout(() => {
       setPopups(prev => prev.filter(p => p.id !== id));
     }, 1200);
@@ -336,6 +416,14 @@ export default function App() {
       prevBattleStateRef.current = null;
       timerId = setTimeout(() => {
         setPopups([]);
+        setScreenShake(false);
+        setAbilityFlash(null);
+        setRoundIntro(null);
+        setConfetti(false);
+        setDefeatParticles(false);
+        setHealthFlash({ me: false, opp: false });
+        setCardOverlay({ me: null, opp: null });
+        setShieldShatter({ me: false, opp: false });
       }, 0);
     } else {
       const prev = prevBattleStateRef.current;
@@ -344,6 +432,26 @@ export default function App() {
       if (prev) {
         const newRound = battleState.round_number !== prev.round_number;
         const gameOverState = battleState.game_over && !prev.game_over;
+
+        // --- ROUND TRANSITION ---
+        if (newRound && !gameOverState) {
+          setRoundIntro({ round: battleState.round_number });
+          timerId = setTimeout(() => setRoundIntro(null), 1500);
+        }
+
+        // --- GAME OVER EFFECTS ---
+        if (gameOverState) {
+          const isP1User = !roomState || !roomState.is_pvp || battleState.player1_id === clientId;
+          const winnerIsUser = (battleState.winner === 'Player 1' && isP1User) ||
+                                (battleState.winner === 'Player 2' && !isP1User);
+          if (winnerIsUser) {
+            setConfetti(true); // eslint-disable-line react-hooks/set-state-in-effect
+            hapticSuccess();
+          } else {
+            setDefeatParticles(true); // eslint-disable-line react-hooks/set-state-in-effect
+            hapticMedium();
+          }
+        }
 
         if (newRound || gameOverState) {
           timerId = setTimeout(() => {
@@ -373,33 +481,101 @@ export default function App() {
 
             if (!prevMe || !prevOpp || !currMe || !currOpp) return;
 
-            // Check damage / heal / shield for Me
-            const meHpDiff = currMe.current_health - prevMe.current_health;
-            if (meHpDiff < 0) {
-              setOppAnimClass('animate-strike-left');
-              setTimeout(() => {
-                setMyAnimClass('animate-damage-shake');
-                spawnPopup(`-${Math.abs(meHpDiff)}`, 'damage', 'me');
-              }, 150);
-            } else if (meHpDiff > 0) {
-              spawnPopup(`+${meHpDiff}`, 'heal', 'me');
-            } else if (currMe.shield_active && !prevMe.shield_active) {
-              spawnPopup('SHIELD', 'shield', 'me');
+            // --- ABILITY CAST DETECTION (cooldown 0→>0) ---
+            if ((prevMe.ability_cooldown || 0) === 0 && (currMe.ability_cooldown || 0) > 0) {
+              setAbilityFlash({ element: currMe.element, caster: 'me' });
+              setMyAnimClass('animate-ability-glow');
+              setTimeout(() => { setAbilityFlash(null); setMyAnimClass(''); }, 1000);
+            }
+            if ((prevOpp.ability_cooldown || 0) === 0 && (currOpp.ability_cooldown || 0) > 0) {
+              setAbilityFlash({ element: currOpp.element, caster: 'opp' });
+              setOppAnimClass('animate-ability-glow');
+              setTimeout(() => { setAbilityFlash(null); setOppAnimClass(''); }, 1000);
             }
 
-            // Check damage / heal / shield for Opponent
+            // --- STANCE CHANGE DETECTION ---
+            if (prevMe.stance !== currMe.stance) {
+              setStancePulse(currMe.stance);
+              setTimeout(() => setStancePulse(null), 500);
+            }
+
+            // --- SHIELD BREAK DETECTION ---
+            if (prevMe.shield_active && !currMe.shield_active) {
+              setShieldShatter(prev => ({ ...prev, me: true }));
+              setTimeout(() => setShieldShatter(prev => ({ ...prev, me: false })), 500);
+            }
+            if (prevOpp.shield_active && !currOpp.shield_active) {
+              setShieldShatter(prev => ({ ...prev, opp: true }));
+              setTimeout(() => setShieldShatter(prev => ({ ...prev, opp: false })), 500);
+            }
+
+            // Helper: update card art overlay
+            const updateCardOverlay = (diff, target) => {
+              if (diff < 0) {
+                setCardOverlay(prev => ({ ...prev, [target]: 'damage' }));
+                setTimeout(() => setCardOverlay(prev => ({ ...prev, [target]: null })), 500);
+              } else if (diff > 0) {
+                setCardOverlay(prev => ({ ...prev, [target]: 'heal' }));
+                setTimeout(() => setCardOverlay(prev => ({ ...prev, [target]: null })), 600);
+              }
+            };
+
+            // --- MY CARD EFFECTS ---
+            const meHpDiff = currMe.current_health - prevMe.current_health;
+            const meDamagePct = prevMe.max_health > 0 ? Math.abs(meHpDiff) / prevMe.max_health : 0;
+
+            if (meHpDiff < 0) {
+              const absDmg = Math.abs(meHpDiff);
+              const isHeavy = meDamagePct > 0.15;
+
+              setOppAnimClass('animate-strike-left');
+              if (isHeavy) { setScreenShake(true); setImpactBurst(true); hapticHeavy(); setTimeout(() => setImpactBurst(false), 460); }
+              else hapticMedium();
+
+              setTimeout(() => {
+                setMyAnimClass('animate-damage-shake');
+                setHealthFlash(prevFlash => ({ ...prevFlash, me: true }));
+                updateCardOverlay(meHpDiff, 'me');
+                spawnPopup(`-${absDmg}`, 'damage', 'me', currOpp.element, isHeavy);
+                if (isHeavy) setTimeout(() => setScreenShake(false), 400);
+                setTimeout(() => setHealthFlash(prevFlash => ({ ...prevFlash, me: false })), 500);
+              }, 150);
+            } else if (meHpDiff > 0) {
+              updateCardOverlay(meHpDiff, 'me');
+              spawnPopup(`+${meHpDiff}`, 'heal', 'me', currMe.element);
+            } else if (currMe.shield_active && !prevMe.shield_active) {
+              spawnPopup('SHIELD', 'shield', 'me', currMe.element);
+            }
+
+            // --- OPPONENT CARD EFFECTS ---
             const oppHpDiff = currOpp.current_health - prevOpp.current_health;
+            const oppDamagePct = prevOpp.max_health > 0 ? Math.abs(oppHpDiff) / prevOpp.max_health : 0;
+
             if (oppHpDiff < 0) {
+              const absDmg = Math.abs(oppHpDiff);
+              const isHeavy = oppDamagePct > 0.15;
+
               setMyAnimClass('animate-strike-right');
+              if (isHeavy) { setScreenShake(true); setImpactBurst(true); hapticHeavy(); setTimeout(() => setImpactBurst(false), 460); }
+              else hapticMedium();
+
               setTimeout(() => {
                 setOppAnimClass('animate-damage-shake');
-                spawnPopup(`-${Math.abs(oppHpDiff)}`, 'damage', 'opp');
+                setHealthFlash(prevFlash => ({ ...prevFlash, opp: true }));
+                updateCardOverlay(oppHpDiff, 'opp');
+                spawnPopup(`-${absDmg}`, 'damage', 'opp', currMe.element, isHeavy);
+                if (isHeavy) setTimeout(() => setScreenShake(false), 400);
+                setTimeout(() => setHealthFlash(prevFlash => ({ ...prevFlash, opp: false })), 500);
               }, 150);
             } else if (oppHpDiff > 0) {
-              spawnPopup(`+${oppHpDiff}`, 'heal', 'opp');
+              updateCardOverlay(oppHpDiff, 'opp');
+              spawnPopup(`+${oppHpDiff}`, 'heal', 'opp', currOpp.element);
             } else if (currOpp.shield_active && !prevOpp.shield_active) {
-              spawnPopup('SHIELD', 'shield', 'opp');
+              spawnPopup('SHIELD', 'shield', 'opp', currOpp.element);
             }
+
+            // --- UPDATE MASCOT MOOD ---
+            setMascotAnimation(deriveMascotMood(battleState, currMe, currOpp));
 
             setTimeout(() => {
               setMyAnimClass('');
@@ -589,7 +765,7 @@ export default function App() {
     const stages = [
       'Reading visual metadata & color signatures...',
       'Synthesizing structural materials (checking density)...',
-      'Piping object to Gemini 1.5 Flash Vision Matrix...',
+      'Piping object to Gemini 2.5 Flash Vision Matrix...',
       'Zero-shot alchemical balancing in progress...',
       'Forging card element and elemental abilities...',
       'Summoning card to inventory...'
@@ -665,11 +841,11 @@ export default function App() {
         connectRoomWebSocket(data.lobby_id, selectedCard);
         setActiveView('battle');
       } else {
-        alert("Failed to initialize campaign match.");
+        toast({ type: 'error', title: 'Battle Failed', message: 'Failed to initialize campaign match.' });
       }
     } catch (e) {
       console.error(e);
-      alert("Error reaching battle server.");
+      toast({ type: 'error', title: 'Network Error', message: 'Failed to reach the battle server.' });
     }
   };
 
@@ -695,11 +871,11 @@ export default function App() {
         connectRoomWebSocket(data.lobby_id, selectedCard);
         setActiveView('battle');
       } else {
-        alert("Failed to initialize random duel.");
+        toast({ type: 'error', title: 'Duel Failed', message: 'Failed to initialize random duel.' });
       }
     } catch (e) {
       console.error(e);
-      alert("Error reaching battle server.");
+      toast({ type: 'error', title: 'Network Error', message: 'Failed to reach the battle server.' });
     }
   };
 
@@ -726,11 +902,11 @@ export default function App() {
         connectRoomWebSocket(data.lobby_id, myCard);
         setActiveView('battle');
       } else {
-        alert("Failed to initialize custom alchemical duel.");
+        toast({ type: 'error', title: 'Duel Failed', message: 'Failed to initialize custom alchemical duel.' });
       }
     } catch (e) {
       console.error(e);
-      alert("Error reaching battle server.");
+      toast({ type: 'error', title: 'Network Error', message: 'Failed to reach the battle server.' });
     }
   };
 
@@ -755,17 +931,17 @@ export default function App() {
         setShowMatchmakingModal(false);
         setActiveView('lobby');
       } else {
-        alert("Failed to create PvP room.");
+        toast({ type: 'error', title: 'Room Failed', message: 'Failed to create PvP room.' });
       }
     } catch (e) {
       console.error(e);
-      alert("Error reaching battle server.");
+      toast({ type: 'error', title: 'Network Error', message: 'Failed to reach the battle server.' });
     }
   };
 
   const joinPvpBattle = async () => {
     if (!joinRoomCode.trim()) {
-      alert("Please enter a Room Code");
+      toast({ type: 'warn', title: 'Missing Code', message: 'Please enter a Room Code to join.' });
       return;
     }
     const code = joinRoomCode.trim().toUpperCase();
@@ -776,12 +952,12 @@ export default function App() {
     setActiveView('lobby');
   };
 
-  const connectRoomWebSocket = (roomCode, cardToRegister) => {
+  const connectRoomWebSocket = (roomCode, cardToRegister, isHost = false) => {
     if (socket) {
       socket.close();
     }
 
-    const wsUrl = `${WS_BASE}/ws/room/${roomCode}/${clientId}`;
+    const wsUrl = `${WS_BASE}/ws/room/${roomCode}/${clientId}${isHost ? '?host=1' : ''}`;
     const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
@@ -844,12 +1020,17 @@ export default function App() {
         });
       } else if (data.type === 'error') {
         setBattleLogs(prev => [...prev, `[ERROR] ${data.message}`]);
+        toast({ type: 'error', title: 'Room Error', message: data.message });
+        // If room doesn't exist, go back to selection
+        if (data.message && data.message.includes('not found')) {
+          setActiveView('lobby_select');
+        }
       }
     };
 
     ws.onerror = (error) => {
       console.error("WebSocket error:", error);
-      alert("WebSocket connection error. Please verify your backend server is active and reachable.");
+      toast({ type: 'error', title: 'Connection Error', message: 'WebSocket error. Verify backend is active and reachable.' });
     };
 
     ws.onclose = () => {
@@ -858,7 +1039,10 @@ export default function App() {
       setRoomState(null);
       setActiveView(prev => {
         if (prev === 'lobby' || prev === 'tournament' || prev === 'battle') {
-          alert("Connection lost. Returning to PvP room selection.");
+          // Only show "connection lost" toast if we didn't already navigate away via an error
+          if (prev !== 'lobby_select') {
+            toast({ type: 'warn', title: 'Connection Lost', message: 'Disconnected from room. Returning to lobby selection.' });
+          }
           return 'lobby_select';
         }
         return prev;
@@ -890,6 +1074,20 @@ export default function App() {
     setJoinRoomCode('');
     setRoomState(null);
     setIsSpectatingActive(false);
+    // Reset all animation states
+    setScreenShake(false);
+    setAbilityFlash(null);
+    setHealthFlash({ me: false, opp: false });
+    setCardOverlay({ me: null, opp: null });
+    setRoundIntro(null);
+    setConfetti(false);
+    setDefeatParticles(false);
+    setStancePulse(null);
+    setMascotAnimation('animate-mascot-referee');
+    setShieldShatter({ me: false, opp: false });
+    setMyAnimClass('');
+    setOppAnimClass('');
+    setPopups([]);
     setActiveView('inventory');
     fetchInventory();
     fetchDashboardData();
@@ -1054,66 +1252,95 @@ export default function App() {
   const { me, opponent, isSpectator } = getFightersForDisplay();
 
   return (
-    <div className={`flex flex-col text-slate-100 w-full ${activeView === 'battle' ? 'h-screen max-h-screen overflow-hidden p-2' : 'min-h-screen p-4 md:p-6 max-w-7xl mx-auto'}`}>
+    <div className={`flex flex-col text-slate-100 w-full ${activeView === 'battle' ? 'h-dvh max-h-dvh overflow-hidden p-2' : 'min-h-dvh p-4 pb-28 md:pb-6 md:p-6 max-w-7xl mx-auto'}`}>
+      {/* MOBILE BOTTOM NAV */}
+      {activeView !== 'battle' && activeView !== 'tournament' && (
+        <BottomNav
+          activeView={activeView}
+          disabled={activeView === 'lobby'}
+          onSettings={() => setShowSettingsModal(true)}
+          onNavigate={(view) => {
+            if (activeView === 'battle' || activeView === 'lobby' || activeView === 'tournament') return;
+            setActiveView(view);
+            if (view === 'inventory') fetchInventory();
+            else if (view === 'feed') fetchTodayFeed();
+            else if (view === 'advisor') fetchInventory();
+            else fetchDashboardData();
+          }}
+        />
+      )}
+
+      {/* FLOATING REWARD POPUPS */}
+      <div className="fixed inset-x-0 top-1/3 z-[199] pointer-events-none flex flex-col items-center gap-3">
+        {rewardPopups.map(r => (
+          <div key={r.id} className="animate-reward-float font-mono font-extrabold text-xl text-cyber-yellow drop-shadow-[0_0_12px_rgba(255,251,0,0.8)] tracking-wider">
+            {r.text}
+          </div>
+        ))}
+      </div>
+
       {/* HEADER NAVBAR */}
       {(activeView !== 'battle' && activeView !== 'tournament') && (
-        <header className="flex flex-col sm:flex-row items-center justify-between border-b border-white/10 pb-4 mb-6 gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-tr from-cyber-purple to-cyber-blue flex items-center justify-center font-mono font-bold text-black text-xl shadow-[0_0_15px_rgba(157,78,221,0.6)]">
-              ☿
-            </div>
-            <div>
-              <h1 className="text-2xl font-extrabold tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-cyber-purple via-cyber-blue to-cyber-green font-mono uppercase animate-flicker">
-                POCKET ALCHEMY
-              </h1>
-              <p className="text-xs text-slate-400 font-mono tracking-widest uppercase">multimodal mobile card battler</p>
-            </div>
-          </div>
-
-          <div className="flex flex-col sm:items-end gap-2 font-mono">
-            {/* Player Stats Dashboard Bar */}
-            {profile && (
-              <div className="flex gap-4 text-[10px] bg-slate-950/80 border border-white/5 px-3 py-1.5 rounded-lg select-none">
-                <span className="text-cyber-purple font-bold">✨ DUST: <span className="text-white">{profile.aether_dust}</span></span>
-                <span className="text-cyber-blue font-bold">🧪 CATALYSTS: <span className="text-white">{profile.catalysts}</span></span>
-                <span className="text-cyber-green font-bold">🏰 CAMPAIGN STAGE: <span className="text-white">{profile.unlocked_campaign_stage}</span></span>
+        <header className="flex flex-col sm:flex-row items-center justify-between border-b border-white/10 pb-4 mb-4 gap-3">
+          {/* Logo + compact HUD on mobile */}
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-start">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-gradient-to-tr from-cyber-purple to-cyber-blue flex items-center justify-center font-mono font-bold text-black text-xl shadow-[0_0_15px_rgba(157,78,221,0.6)] shrink-0">
+                ☿
               </div>
-            )}
-
-            {/* Navigation Tabs */}
-            <div className="flex gap-1.5 flex-wrap">
-              {[
-                { view: 'transmute', label: '1. TRANSMUTE', color: 'border-cyber-purple/20 hover:border-cyber-purple/40 hover:text-slate-200', activeColor: 'bg-cyber-purple text-black border-cyber-purple shadow-[0_0_10px_rgba(157,78,221,0.4)]' },
-                { view: 'inventory', label: '2. ALCHEMY VAULT', color: 'border-cyber-blue/20 hover:border-cyber-blue/40 hover:text-slate-200', activeColor: 'bg-cyber-blue text-black border-cyber-blue shadow-[0_0_10px_rgba(0,240,255,0.4)]' },
-                { view: 'leaderboard', label: '3. LEADERBOARD', color: 'border-cyber-green/20 hover:border-cyber-green/40 hover:text-slate-200', activeColor: 'bg-cyber-green text-black border-cyber-green shadow-[0_0_10px_rgba(57,255,20,0.4)]' },
-                { view: 'badges', label: '4. BADGES VAULT', color: 'border-cyber-pink/20 hover:border-cyber-pink/40 hover:text-slate-200', activeColor: 'bg-cyber-pink text-black border-cyber-pink shadow-[0_0_10px_rgba(255,0,127,0.4)]' },
-                { view: 'feed', label: '5. TODAY\'S FEED', color: 'border-cyber-yellow/20 hover:border-cyber-yellow/40 hover:text-slate-200', activeColor: 'bg-cyber-yellow text-black border-cyber-yellow shadow-[0_0_10px_rgba(255,251,0,0.4)]' },
-                { view: 'lobby_select', label: '6. PVP ROOMS', color: 'border-cyber-blue/20 hover:border-cyber-blue/40 hover:text-slate-200', activeColor: 'bg-cyber-blue text-black border-cyber-blue shadow-[0_0_10px_rgba(0,240,255,0.4)]' },
-                { view: 'advisor', label: '7. ALCHEMICAL SAGE', color: 'border-cyber-purple/20 hover:border-cyber-purple/40 hover:text-slate-200', activeColor: 'bg-cyber-purple text-black border-cyber-purple shadow-[0_0_10px_rgba(157,78,221,0.4)]' }
-              ].map((tab) => (
-                <button
-                  key={tab.view}
-                  onClick={() => {
-                    if (activeView !== 'battle' && activeView !== 'lobby' && activeView !== 'tournament') {
-                      setActiveView(tab.view);
-                      if (tab.view === 'inventory') fetchInventory();
-                      else if (tab.view === 'feed') fetchTodayFeed();
-                      else if (tab.view === 'advisor') fetchInventory();
-                      else fetchDashboardData();
-                    }
-                  }}
-                  disabled={activeView === 'battle' || activeView === 'lobby' || activeView === 'tournament'}
-                  className={`px-3 py-1.5 rounded-lg font-mono text-xs font-semibold transition-all border ${activeView === tab.view ? tab.activeColor : `bg-transparent text-slate-400 ${tab.color} disabled:opacity-40`
-                    }`}
-                >
-                  [{tab.label}]
-                </button>
-              ))}
+              <div>
+                <h1 className="text-lg sm:text-2xl font-extrabold tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-cyber-purple via-cyber-blue to-cyber-green font-mono uppercase animate-flicker">
+                  POCKET ALCHEMY
+                </h1>
+                <p className="text-[8px] sm:text-xs text-slate-400 font-mono tracking-widest uppercase hidden sm:block">multimodal mobile card battler</p>
+              </div>
+            </div>
+            {/* Compact HUD — mobile only */}
+            <div className="md:hidden">
+              <PlayerHUD profile={profile} compact />
             </div>
           </div>
 
-          {/* Connection status pills */}
-          <div className="flex gap-2 text-xs font-mono">
+          {/* Desktop: full HUD + desktop nav tabs */}
+          <div className="hidden md:flex flex-col items-end gap-2 font-mono flex-1">
+            <PlayerHUD profile={profile} />
+            {/* Navigation Tabs */}
+            <div className="flex gap-1.5 flex-wrap justify-end">
+              {NAV_ITEMS.map((tab) => {
+                const ACCENT_MAP = {
+                  transmute: 'bg-cyber-purple text-black border-cyber-purple shadow-[0_0_10px_rgba(157,78,221,0.4)]',
+                  inventory: 'bg-cyber-blue text-black border-cyber-blue shadow-[0_0_10px_rgba(0,240,255,0.4)]',
+                  leaderboard: 'bg-cyber-green text-black border-cyber-green shadow-[0_0_10px_rgba(57,255,20,0.4)]',
+                  badges: 'bg-cyber-pink text-black border-cyber-pink shadow-[0_0_10px_rgba(255,0,127,0.4)]',
+                  feed: 'bg-cyber-yellow text-black border-cyber-yellow shadow-[0_0_10px_rgba(255,251,0,0.4)]',
+                  lobby_select: 'bg-cyber-blue text-black border-cyber-blue shadow-[0_0_10px_rgba(0,240,255,0.4)]',
+                  advisor: 'bg-cyber-purple text-black border-cyber-purple shadow-[0_0_10px_rgba(157,78,221,0.4)]',
+                };
+                const isActive = activeView === tab.view;
+                return (
+                  <button
+                    key={tab.view}
+                    onClick={() => {
+                      if (activeView !== 'battle' && activeView !== 'lobby' && activeView !== 'tournament') {
+                        setActiveView(tab.view);
+                        if (tab.view === 'inventory') fetchInventory();
+                        else if (tab.view === 'feed') fetchTodayFeed();
+                        else if (tab.view === 'advisor') fetchInventory();
+                        else fetchDashboardData();
+                      }
+                    }}
+                    disabled={activeView === 'battle' || activeView === 'lobby' || activeView === 'tournament'}
+                    className={`px-3 py-1.5 rounded-lg font-mono text-xs font-semibold transition-all border ${isActive ? (ACCENT_MAP[tab.view] || 'bg-cyber-purple text-black border-cyber-purple') : 'bg-transparent text-slate-400 border-white/10 hover:border-white/30 hover:text-slate-200 disabled:opacity-40'}`}
+                  >
+                    {tab.icon} {tab.short}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Connection status pills — desktop */}
+          <div className="hidden sm:flex gap-2 text-xs font-mono">
             <button
               onClick={() => setShowSettingsModal(true)}
               className={`px-2 py-1 rounded border transition-all cursor-pointer hover:brightness-110 active:scale-95 ${healthStatus.status === 'healthy'
@@ -1122,13 +1349,13 @@ export default function App() {
                 }`}
               title="Click to configure backend IP address"
             >
-              CORE: {healthStatus.status === 'healthy' ? 'ONLINE' : 'OFFLINE ⚙️'}
+              CORE: {healthStatus.status === 'healthy' ? '✓ ONLINE' : 'OFFLINE ⚙️'}
             </button>
             <span className={`px-2 py-1 rounded border ${healthStatus.gemini_api_configured
                 ? 'bg-purple-500/10 text-purple-400 border-purple-500/30'
                 : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
               }`}>
-              GEMINI API: {healthStatus.gemini_api_configured ? 'CONNECTED' : 'LOCAL FALLBACK'}
+              AI: {healthStatus.gemini_api_configured ? '✓' : '⚠'}
             </span>
           </div>
         </header>
@@ -1136,7 +1363,7 @@ export default function App() {
 
       {/* VIEW 1: TRANSMUTATION MATRIX (LIVE CAMERA VIEWPORT) */}
       {activeView === 'transmute' && (
-        <div className="flex-1 flex flex-col lg:flex-row gap-6 items-stretch">
+        <div className="flex-1 flex flex-col lg:flex-row gap-6 items-stretch animate-screen-enter">
           {/* Live Camera Box */}
           <div className="flex-1 flex flex-col">
             <div
@@ -1250,7 +1477,7 @@ export default function App() {
                     {/* Shutter capture button overlay */}
                     <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20">
                       <button
-                        onClick={captureFrameAndTransmute}
+                        onClick={() => { hapticMedium(); captureFrameAndTransmute(); }}
                         disabled={isUploading}
                         className="w-14 h-14 rounded-full bg-white/20 hover:bg-white/40 border-4 border-white flex items-center justify-center transition-all cursor-pointer shadow-[0_0_15px_rgba(255,255,255,0.3)] hover:scale-105 active:scale-95 disabled:opacity-40"
                       >
@@ -1302,7 +1529,7 @@ export default function App() {
 
       {/* VIEW 2: ALCHEMY VAULT INVENTORY */}
       {activeView === 'inventory' && (
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col animate-screen-enter">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-bold tracking-wide font-mono uppercase flex items-center gap-2">
               <span>⚛</span> Forged Inventory ({cards.length})
@@ -1330,14 +1557,15 @@ export default function App() {
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 justify-items-center">
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6 justify-items-center">
               {cards.map((card, idx) => (
-                <TradingCard
-                  key={idx}
-                  card={card}
-                  onAction={() => selectCardForArena(card)}
-                  actionLabel="SUMMON TO ARENA"
-                />
+                <div key={idx} className="animate-card-deal w-full flex justify-center" style={{ animationDelay: `${idx * 60}ms` }}>
+                  <TradingCard
+                    card={card}
+                    onAction={() => { hapticLight(); selectCardForArena(card); }}
+                    actionLabel="SUMMON TO ARENA"
+                  />
+                </div>
               ))}
             </div>
           )}
@@ -1346,7 +1574,7 @@ export default function App() {
 
       {/* VIEW 6.5: ALCHEMICAL SAGE ADVISOR CHAT */}
       {activeView === 'advisor' && (
-        <div className="flex-1 flex flex-col lg:flex-row gap-6 items-stretch">
+        <div className="flex-1 flex flex-col lg:flex-row gap-6 items-stretch animate-screen-enter">
           {/* Chat Panel */}
           <div className="flex-1 flex flex-col cyber-glass border border-white/10 rounded-2xl p-5 bg-black/40 min-h-[500px]">
             <div className="flex items-center justify-between pb-3 border-b border-white/5 mb-4">
@@ -1470,7 +1698,7 @@ export default function App() {
 
       {/* VIEW 2.5: LEADERBOARD & SCOREBOARD */}
       {activeView === 'leaderboard' && (
-        <div className="flex-1 flex flex-col gap-6 font-mono">
+        <div className="flex-1 flex flex-col gap-6 font-mono animate-screen-enter">
           {/* Daily Quest */}
           {dailyQuest && (
             <div className="cyber-glass border border-cyber-green/30 bg-cyber-green/5 p-4 rounded-xl flex items-center justify-between">
@@ -1584,7 +1812,7 @@ export default function App() {
 
       {/* VIEW 2.6: BADGES VAULT */}
       {activeView === 'badges' && (
-        <div className="flex-1 flex flex-col gap-6 font-mono">
+        <div className="flex-1 flex flex-col gap-6 font-mono animate-screen-enter">
           <div className="cyber-glass rounded-xl p-5 border border-white/10 bg-black/40">
             <h2 className="text-xl font-bold font-mono text-amber-400 uppercase tracking-wider">🏆 Badges Vault</h2>
             <p className="text-xs text-slate-400 mt-1">Unlock prestigious titles by progressing through solo campaign boss nodes.</p>
@@ -1626,7 +1854,7 @@ export default function App() {
 
       {/* VIEW 2.7: TODAY'S FEED */}
       {activeView === 'feed' && (
-        <div className="flex-1 flex flex-col font-mono">
+        <div className="flex-1 flex flex-col font-mono animate-screen-enter">
           <div className="cyber-glass rounded-xl p-5 border border-white/10 bg-black/40 mb-6">
             <h2 className="text-xl font-bold font-mono text-cyber-yellow uppercase tracking-wider">🔥 Today's Alchemical Feed</h2>
             <p className="text-xs text-slate-400 mt-1">Discover the latest cards forged in the crucible today. Challenge any card using your vault summons!</p>
@@ -1641,17 +1869,19 @@ export default function App() {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 justify-items-center">
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6 justify-items-center">
               {todayFeed.map((card, idx) => (
-                <TradingCard
-                  key={idx}
-                  card={card}
-                  onAction={() => {
-                    setChallengerTargetOpponent(card);
-                    setShowFighterSelectorModal(true);
-                  }}
-                  actionLabel="⚔️ CHALLENGE SUMMON"
-                />
+                <div key={idx} className="animate-card-deal w-full flex justify-center" style={{ animationDelay: `${idx * 60}ms` }}>
+                  <TradingCard
+                    card={card}
+                    onAction={() => {
+                      hapticLight();
+                      setChallengerTargetOpponent(card);
+                      setShowFighterSelectorModal(true);
+                    }}
+                    actionLabel="⚔️ CHALLENGE SUMMON"
+                  />
+                </div>
               ))}
             </div>
           )}
@@ -1660,16 +1890,54 @@ export default function App() {
 
       {/* VIEW 3: BATTLE ARENA */}
       {activeView === 'battle' && battleState && me && (
-        <div className="flex-1 flex flex-col gap-3 justify-between overflow-hidden relative">
+        <div className={`flex-1 flex flex-col gap-2 justify-between overflow-hidden relative ${screenShake ? 'animate-screen-shake' : ''}`}>
+
+          {/* Ability Cast Screen Flash Overlay */}
+          {abilityFlash && (
+            <div
+              className="absolute inset-0 z-35 pointer-events-none animate-ability-flash rounded-xl"
+              style={{
+                background: `radial-gradient(circle at center, ${getElementGlowColor(abilityFlash.element)}, transparent 70%)`
+              }}
+            />
+          )}
+
+          {/* Heavy Hit Impact Burst */}
+          {impactBurst && (
+            <div className="absolute inset-0 z-36 pointer-events-none flex items-center justify-center">
+              <div className="w-32 h-32 rounded-full border-4 border-white/60 animate-impact-burst" />
+            </div>
+          )}
+
+          {/* Round Intro Announcement Overlay */}
+          {roundIntro && (
+            <div className="absolute inset-0 z-45 pointer-events-none flex items-center justify-center">
+              <div className="animate-round-intro text-center">
+                <span className="text-[10px] font-mono text-cyber-blue font-extrabold uppercase tracking-widest block mb-2">
+                  ARENA COMBAT
+                </span>
+                <span className="text-5xl md:text-7xl font-black font-mono text-white tracking-[0.3em] drop-shadow-[0_0_30px_rgba(0,240,255,0.8)]">
+                  ROUND {roundIntro.round}
+                </span>
+              </div>
+            </div>
+          )}
 
           {/* Sequential Animated Battle Log Overlay */}
           {displayedLog && (
             <div className="absolute inset-x-4 top-1/3 z-40 pointer-events-none flex justify-center items-center">
               <div className="animate-log-overlay text-center px-6 py-4 bg-black/90 border-2 border-cyber-green rounded-2xl shadow-[0_0_25px_rgba(57,255,20,0.4)] backdrop-blur-md max-w-lg">
                 <span className="text-[10px] font-mono text-cyber-green font-extrabold uppercase tracking-widest block mb-1">
-                  ⚡ COMBAT ANALYSIS ⚡
+                  COMBAT LOG
                 </span>
-                <p className="font-mono text-xs md:text-sm font-bold text-white tracking-wide uppercase drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
+                <p className={`font-mono text-xs md:text-sm font-bold tracking-wide uppercase drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] leading-relaxed ${
+                  displayedLog.includes('⚔️') || displayedLog.includes('💥') ? 'text-red-300' :
+                  displayedLog.includes('✨') ? 'text-fuchsia-300' :
+                  displayedLog.includes('🛡️') ? 'text-cyan-300' :
+                  displayedLog.includes('❤️') || displayedLog.includes('💪') || displayedLog.includes('⚡') ? 'text-green-300' :
+                  displayedLog.includes('🏆') ? 'text-yellow-300' :
+                  'text-white'
+                }`}>
                   {displayedLog}
                 </p>
               </div>
@@ -1698,10 +1966,13 @@ export default function App() {
           </div>
 
           {/* Combatants 3-Column Arena Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-stretch flex-1 min-h-0 overflow-y-auto md:overflow-hidden">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-3 items-stretch flex-1 min-h-0 overflow-y-auto md:overflow-hidden">
 
             {/* COLUMN 1: Player Card Details */}
-            <div className={`cyber-glass border border-white/10 rounded-xl p-4 flex flex-col justify-between relative overflow-hidden transition-all duration-300 ${myAnimClass}`}>
+            <div
+              className={`cyber-glass border border-white/10 rounded-xl p-4 flex flex-col justify-between relative overflow-hidden transition-all duration-300 ${myAnimClass}`}
+              style={myAnimClass === 'animate-ability-glow' ? { '--glow-color': getElementGlowColor(me.element) } : {}}
+            >
               <div className="flex justify-between items-center mb-2 text-xs text-cyber-purple font-mono uppercase tracking-wider">
                 <span>{isSpectator ? "Fighter 1" : "Player (You)"}</span>
                 <span className="px-2 py-0.5 rounded bg-cyber-purple/10 border border-cyber-purple/30 text-cyber-purple text-[10px] font-bold">
@@ -1714,22 +1985,30 @@ export default function App() {
                 {popups.filter(p => p.target === 'me').map(p => (
                   <span
                     key={p.id}
-                    className={`damage-popup absolute text-4xl font-extrabold font-mono tracking-wider ${p.type === 'damage' ? 'text-red-500 drop-shadow-[0_0_12px_rgba(239,68,68,0.8)]' :
-                        p.type === 'heal' ? 'text-green-400 drop-shadow-[0_0_12px_rgba(74,222,128,0.8)]' :
-                          'text-cyber-blue drop-shadow-[0_0_12px_rgba(0,240,255,0.8)]'
-                      }`}
+                    className={`damage-popup absolute font-extrabold font-mono tracking-wider ${p.isHeavy ? 'damage-popup-critical text-5xl' : 'text-4xl'} ${
+                      p.type === 'damage' ? getElementDamageColor(p.element) :
+                      p.type === 'heal' ? 'text-green-400 drop-shadow-[0_0_12px_rgba(74,222,128,0.8)]' :
+                      'text-cyber-blue drop-shadow-[0_0_12px_rgba(0,240,255,0.8)]'
+                    }`}
                   >
                     {p.text}
                   </span>
                 ))}
               </div>
 
-              {me.shield_active && (
-                <div className="absolute inset-0 border-2 border-cyber-blue animate-pulse rounded-xl pointer-events-none z-10" />
+              {/* Shield Active / Shatter Overlay */}
+              {me.shield_active ? (
+                <div className="absolute inset-0 border-2 border-cyber-blue rounded-xl pointer-events-none z-10" style={{ animation: 'pulse-neon 1.5s infinite' }} />
+              ) : shieldShatter.me && (
+                <div className="absolute inset-0 border-2 border-cyber-blue/50 rounded-xl pointer-events-none z-10 animate-shield-shatter" />
               )}
 
               {/* Card Art Image Frame */}
-              <div className="w-full h-44 rounded-lg bg-black/60 flex items-center justify-center overflow-hidden border border-white/5 relative mb-3">
+              <div className="w-full h-28 sm:h-36 md:h-44 rounded-lg bg-black/60 flex items-center justify-center overflow-hidden border border-white/5 relative mb-2 md:mb-3">
+                {/* Damage/Heal overlay on card art */}
+                {cardOverlay.me && (
+                  <div className={`absolute inset-0 z-20 pointer-events-none rounded-lg ${cardOverlay.me === 'damage' ? 'animate-damage-overlay' : 'animate-heal-overlay'}`} />
+                )}
                 {resolveImageUrl(me) ? (
                   <img
                     src={resolveImageUrl(me)}
@@ -1751,11 +2030,14 @@ export default function App() {
                   <span>HEALTH POOL</span>
                   <span className="font-bold text-white">{me.current_health}/{me.max_health} HP</span>
                 </div>
-                <div className="w-full bg-slate-950/80 h-3 rounded-full overflow-hidden border border-white/5 p-[2px]">
+                <div className="w-full bg-slate-950/80 h-3 rounded-full overflow-hidden border border-white/5 p-[2px] relative">
                   <div
                     style={{ width: `${(me.current_health / me.max_health) * 100}%` }}
                     className="h-full rounded-full bg-gradient-to-r from-cyber-purple to-cyber-blue transition-all duration-500 shadow-[0_0_8px_#9d4edd]"
                   />
+                  {healthFlash.me && (
+                    <div className="absolute inset-0 rounded-full animate-health-bar-flash z-10 pointer-events-none" />
+                  )}
                 </div>
               </div>
 
@@ -1772,11 +2054,11 @@ export default function App() {
             </div>
 
             {/* COLUMN 2: Comparative metrics & Mascot Comments & Chronos hint */}
-            <div className="flex flex-col gap-3 justify-between flex-1 min-h-0 bg-slate-950/30 border border-white/5 rounded-xl p-3 overflow-y-auto retro-scroll">
+            <div className="col-span-2 md:col-span-1 order-last md:order-none flex flex-col gap-2 md:gap-3 justify-between flex-1 min-h-0 bg-slate-950/30 border border-white/5 rounded-xl p-2 md:p-3 overflow-y-auto retro-scroll">
 
               {/* Referee Mascot */}
               <div className="flex items-start gap-3 bg-black/60 border border-white/10 p-3 rounded-xl relative shadow-[inset_0_0_10px_rgba(255,255,255,0.05)]">
-                <div className="w-12 h-12 rounded-lg bg-cyber-purple/20 border border-cyber-purple/40 flex items-center justify-center text-2xl shrink-0 animate-mascot-referee overflow-hidden">
+                <div className={`w-12 h-12 rounded-lg bg-cyber-purple/20 border border-cyber-purple/40 flex items-center justify-center text-2xl shrink-0 overflow-hidden ${mascotAnimation}`}>
                   <img
                     src="/mascot.png"
                     onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }}
@@ -1864,7 +2146,10 @@ export default function App() {
             </div>
 
             {/* COLUMN 3: Opponent Card Details */}
-            <div className={`cyber-glass border border-white/10 rounded-xl p-4 flex flex-col justify-between relative overflow-hidden transition-all duration-300 ${oppAnimClass}`}>
+            <div
+              className={`cyber-glass border border-white/10 rounded-xl p-4 flex flex-col justify-between relative overflow-hidden transition-all duration-300 ${oppAnimClass}`}
+              style={oppAnimClass === 'animate-ability-glow' ? { '--glow-color': getElementGlowColor(opponent.element) } : {}}
+            >
               <div className="flex justify-between items-center mb-2 text-xs text-red-400 font-mono uppercase tracking-wider">
                 <span>{isSpectator ? "Fighter 2" : "Opponent"}</span>
                 <span className="px-2 py-0.5 rounded bg-red-500/10 border border-red-500/30 text-red-400 text-[10px] font-bold">
@@ -1877,22 +2162,30 @@ export default function App() {
                 {popups.filter(p => p.target === 'opp').map(p => (
                   <span
                     key={p.id}
-                    className={`damage-popup absolute text-4xl font-extrabold font-mono tracking-wider ${p.type === 'damage' ? 'text-red-500 drop-shadow-[0_0_12px_rgba(239,68,68,0.8)]' :
-                        p.type === 'heal' ? 'text-green-400 drop-shadow-[0_0_12px_rgba(74,222,128,0.8)]' :
-                          'text-cyber-blue drop-shadow-[0_0_12px_rgba(0,240,255,0.8)]'
-                      }`}
+                    className={`damage-popup absolute font-extrabold font-mono tracking-wider ${p.isHeavy ? 'damage-popup-critical text-5xl' : 'text-4xl'} ${
+                      p.type === 'damage' ? getElementDamageColor(p.element) :
+                      p.type === 'heal' ? 'text-green-400 drop-shadow-[0_0_12px_rgba(74,222,128,0.8)]' :
+                      'text-cyber-blue drop-shadow-[0_0_12px_rgba(0,240,255,0.8)]'
+                    }`}
                   >
                     {p.text}
                   </span>
                 ))}
               </div>
 
-              {opponent.shield_active && (
-                <div className="absolute inset-0 border-2 border-red-500 animate-pulse rounded-xl pointer-events-none z-10" />
+              {/* Shield Active / Shatter Overlay */}
+              {opponent.shield_active ? (
+                <div className="absolute inset-0 border-2 border-red-500 rounded-xl pointer-events-none z-10" style={{ animation: 'pulse-neon 1.5s infinite' }} />
+              ) : shieldShatter.opp && (
+                <div className="absolute inset-0 border-2 border-red-500/50 rounded-xl pointer-events-none z-10 animate-shield-shatter" />
               )}
 
               {/* Card Art Image Frame */}
-              <div className="w-full h-44 rounded-lg bg-black/60 flex items-center justify-center overflow-hidden border border-white/5 relative mb-3">
+              <div className="w-full h-28 sm:h-36 md:h-44 rounded-lg bg-black/60 flex items-center justify-center overflow-hidden border border-white/5 relative mb-2 md:mb-3">
+                {/* Damage/Heal overlay on card art */}
+                {cardOverlay.opp && (
+                  <div className={`absolute inset-0 z-20 pointer-events-none rounded-lg ${cardOverlay.opp === 'damage' ? 'animate-damage-overlay' : 'animate-heal-overlay'}`} />
+                )}
                 {resolveImageUrl(opponent) ? (
                   <img
                     src={resolveImageUrl(opponent)}
@@ -1914,11 +2207,14 @@ export default function App() {
                   <span>HEALTH POOL</span>
                   <span className="font-bold text-white">{opponent.current_health}/{opponent.max_health} HP</span>
                 </div>
-                <div className="w-full bg-slate-950/80 h-3 rounded-full overflow-hidden border border-white/5 p-[2px]">
+                <div className="w-full bg-slate-950/80 h-3 rounded-full overflow-hidden border border-white/5 p-[2px] relative">
                   <div
                     style={{ width: `${(opponent.current_health / opponent.max_health) * 100}%` }}
                     className="h-full rounded-full bg-gradient-to-r from-red-500 to-amber-500 transition-all duration-500 shadow-[0_0_8px_#ef4444]"
                   />
+                  {healthFlash.opp && (
+                    <div className="absolute inset-0 rounded-full animate-health-bar-flash z-10 pointer-events-none" />
+                  )}
                 </div>
               </div>
 
@@ -1938,50 +2234,52 @@ export default function App() {
 
           {/* Unified Action Buttons Row */}
           {!isSpectator ? (
-            <div className="flex flex-col gap-2 shrink-0">
+            <div className="flex flex-col gap-1.5 shrink-0 sticky bottom-0 bg-[#08090d]/90 backdrop-blur-sm pt-1 pb-1 md:pb-0 md:static md:bg-transparent md:backdrop-blur-none rounded-t-xl md:rounded-none border-t border-white/5 md:border-0">
 
               {/* Stance Selector Panel */}
-              <div className="bg-black/60 border border-white/10 rounded-xl p-3 flex flex-col gap-2 font-mono">
-                <div className="flex justify-between items-center text-[10px] text-slate-400">
+              <div className="bg-black/60 border border-white/10 rounded-xl p-2 md:p-3 flex flex-col gap-1.5 md:gap-2 font-mono">
+                <div className="hidden md:flex justify-between items-center text-[10px] text-slate-400">
                   <span>TACTICAL STANCE SETTING:</span>
                   <span className="text-slate-500 font-bold uppercase">Influences Speed & Combat Power</span>
                 </div>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-3 gap-1.5 md:gap-2">
                   {[
-                    { id: 'focused', name: 'Focused', desc: 'Cooldown rate x2 | Speed x1.25', color: 'border-cyber-blue text-cyber-blue shadow-[0_0_10px_rgba(0,240,255,0.2)] bg-cyber-blue/10', inactive: 'border-white/5 hover:border-cyber-blue/30 text-slate-400' },
-                    { id: 'aggressive', name: 'Aggressive', desc: 'Dmg x1.2 | Speed x0.9', color: 'border-cyber-pink text-cyber-pink shadow-[0_0_10px_rgba(255,0,127,0.2)] bg-cyber-pink/10', inactive: 'border-white/5 hover:border-cyber-pink/30 text-slate-400' },
-                    { id: 'defensive', name: 'Defensive', desc: 'Block -15 dmg | Dmg x0.8', color: 'border-cyber-green text-cyber-green shadow-[0_0_10px_rgba(57,255,20,0.2)] bg-cyber-green/10', inactive: 'border-white/5 hover:border-cyber-green/30 text-slate-400' }
+                    { id: 'focused', name: 'Focus', desc: 'CDR x2 | SPD x1.25', color: 'border-cyber-blue text-cyber-blue shadow-[0_0_10px_rgba(0,240,255,0.2)] bg-cyber-blue/10', inactive: 'border-white/5 hover:border-cyber-blue/30 text-slate-400' },
+                    { id: 'aggressive', name: 'Aggro', desc: 'DMG x1.2 | SPD x0.9', color: 'border-cyber-pink text-cyber-pink shadow-[0_0_10px_rgba(255,0,127,0.2)] bg-cyber-pink/10', inactive: 'border-white/5 hover:border-cyber-pink/30 text-slate-400' },
+                    { id: 'defensive', name: 'Guard', desc: '-15 dmg | DMG x0.8', color: 'border-cyber-green text-cyber-green shadow-[0_0_10px_rgba(57,255,20,0.2)] bg-cyber-green/10', inactive: 'border-white/5 hover:border-cyber-green/30 text-slate-400' }
                   ].map((st) => (
                     <button
                       key={st.id}
                       disabled={battleState.game_over || actionLocked}
-                      onClick={() => setSelectedStance(st.id)}
-                      className={`py-2 px-1 rounded-lg border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 ${selectedStance === st.id ? st.color : st.inactive
-                        }`}
+                      onClick={() => { hapticLight(); setSelectedStance(st.id); }}
+                      className={`py-2.5 md:py-2 px-1 rounded-lg border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 min-h-[44px] ${selectedStance === st.id ? st.color : st.inactive
+                        } ${selectedStance === st.id && stancePulse === st.id ? 'animate-stance-change' : ''}`}
                     >
                       <span className="text-[11px] font-bold uppercase">{st.name}</span>
-                      <span className="text-[7px] text-slate-500 font-semibold">{st.desc}</span>
+                      <span className="text-[7px] text-slate-500 font-semibold hidden sm:block">{st.desc}</span>
                     </button>
                   ))}
                 </div>
               </div>
 
               {/* Actions row */}
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-1.5 md:gap-2">
                 <button
                   disabled={battleState.game_over || actionLocked}
-                  onClick={() => sendBattleAction('attack')}
-                  className="py-2.5 rounded-lg bg-white/10 hover:bg-white/20 font-bold font-mono text-xs uppercase border border-white/20 disabled:opacity-30 cursor-pointer text-center text-white"
+                  onClick={() => { hapticMedium(); sendBattleAction('attack'); }}
+                  className="py-3 md:py-2.5 rounded-lg bg-white/10 hover:bg-white/20 active:scale-95 font-bold font-mono text-xs uppercase border border-white/20 disabled:opacity-30 cursor-pointer text-center text-white min-h-[48px]"
                 >
                   ⚔️ Strike Attack
                 </button>
                 <div className="flex flex-col">
                   <button
                     disabled={battleState.game_over || actionLocked || me.ability_cooldown > 0}
-                    onClick={() => sendBattleAction('ability')}
-                    className={`py-2.5 rounded-lg font-bold font-mono text-xs uppercase border disabled:opacity-30 cursor-pointer text-center ${me.ability_cooldown > 0
+                    onClick={() => { hapticMedium(); sendBattleAction('ability'); }}
+                    className={`py-3 md:py-2.5 rounded-lg font-bold font-mono text-xs uppercase border disabled:opacity-30 cursor-pointer text-center transition-all duration-300 min-h-[48px] active:scale-95 ${me.ability_cooldown > 0
                         ? 'bg-slate-900 border-white/5 text-slate-500'
-                        : 'bg-gradient-to-r from-cyber-purple to-cyber-blue text-black border-cyber-purple'
+                        : me.ability_cooldown === 0 && !battleState.game_over && !actionLocked
+                          ? 'bg-gradient-to-r from-cyber-purple to-cyber-blue text-black border-cyber-purple shadow-[0_0_18px_rgba(157,78,221,0.6)] animate-pulse'
+                          : 'bg-gradient-to-r from-cyber-purple to-cyber-blue text-black border-cyber-purple'
                       }`}
                   >
                     {actionLocked ? 'Locked' : `✨ Ability ${me.ability_cooldown > 0 ? `(${me.ability_cooldown})` : ''}`}
@@ -2008,12 +2306,12 @@ export default function App() {
                       setSelectedStance(data.stance);
                     } else {
                       const errData = await res.json();
-                      alert(errData.detail || "Managed Agent failed to deploy.");
+                      toast({ type: 'error', title: 'Agent Failed', message: errData.detail || 'Managed Agent failed to deploy.' });
                       setActionLocked(false);
                     }
                   } catch (e) {
                     console.error("Managed Agent deployment error:", e);
-                    alert("Failed to communicate with Managed Agent server.");
+                    toast({ type: 'error', title: 'Agent Error', message: 'Failed to communicate with Managed Agent server.' });
                     setActionLocked(false);
                   }
                 }}
@@ -2031,7 +2329,7 @@ export default function App() {
           {/* Battle End Modal Overlay */}
           {battleState.game_over && (
             <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-4 backdrop-blur-md">
-              <div className="max-w-md w-full cyber-glass border border-white/20 p-6 rounded-2xl text-center shadow-2xl relative">
+              <div className="max-w-md w-full cyber-glass border border-white/20 p-6 rounded-2xl text-center shadow-2xl relative overflow-hidden">
                 {isSpectator ? (
                   <>
                     <div className="text-5xl mb-3">🏆</div>
@@ -2044,6 +2342,23 @@ export default function App() {
                   </>
                 ) : (battleState.winner === 'Player 1' && battleState.player1_id === clientId) || (battleState.winner === 'Player 2' && battleState.player2_id === clientId) || (battleState.winner === `Player ${playerNum}`) ? (
                   <>
+                    {/* Victory Confetti */}
+                    {confetti && (
+                      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                        {Array.from({ length: 30 }).map((_, i) => (
+                          <div
+                            key={i}
+                            className="absolute top-0 w-2 h-3 rounded-sm animate-confetti"
+                            style={{
+                              left: `${((i * 37 + 13) % 100)}%`,
+                              backgroundColor: ['#ff007f', '#00f0ff', '#39ff14', '#fffb00', '#9d4edd'][i % 5],
+                              '--confetti-duration': `${2 + ((i * 17) % 30) / 10}s`,
+                              '--confetti-delay': `${((i * 23) % 20) / 10}s`,
+                            }}
+                          />
+                        ))}
+                      </div>
+                    )}
                     <div className="text-5xl mb-3">🏆</div>
                     <h2 className="text-2xl font-extrabold tracking-wider text-cyber-blue font-mono uppercase mb-1 animate-pulse">
                       ALCHEMICAL VICTORY!
@@ -2054,6 +2369,24 @@ export default function App() {
                   </>
                 ) : (
                   <>
+                    {/* Defeat Particles */}
+                    {defeatParticles && (
+                      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                        {Array.from({ length: 20 }).map((_, i) => (
+                          <div
+                            key={i}
+                            className="absolute top-0 w-1.5 h-1.5 rounded-full animate-defeat-particle"
+                            style={{
+                              left: `${((i * 41 + 19) % 100)}%`,
+                              backgroundColor: ['#ef4444', '#6b7280', '#991b1b', '#374151'][i % 4],
+                              '--particle-duration': `${3 + ((i * 13) % 40) / 10}s`,
+                              '--particle-delay': `${((i * 29) % 20) / 10}s`,
+                              '--drift': `${((i * 31 - 15) % 60)}px`,
+                            }}
+                          />
+                        ))}
+                      </div>
+                    )}
                     <div className="text-5xl mb-3">💀</div>
                     <h2 className="text-2xl font-extrabold tracking-wider text-red-500 font-mono uppercase mb-1 animate-pulse">
                       SUMMON DEFEATED
@@ -2066,8 +2399,14 @@ export default function App() {
 
                 {/* Alchemical Diagnostic Logs */}
                 {battleState.post_match_summary && (
-                  <div className="mt-2 mb-4 bg-black/85 p-3 rounded-xl border border-cyber-purple/35 text-left font-mono text-[9px] text-[#39ff14] max-h-36 overflow-y-auto whitespace-pre-line leading-relaxed retro-scroll">
-                    {battleState.post_match_summary}
+                  <div className="mt-2 mb-4 bg-black/85 p-3 rounded-xl border border-cyber-purple/35 text-left font-mono text-[9px] max-h-36 overflow-y-auto whitespace-pre-line leading-relaxed retro-scroll">
+                    {battleState.post_match_summary.split('\n').map((line, i) => {
+                      let lineColor = 'text-[#39ff14]';
+                      if (line.startsWith('🏆')) lineColor = 'text-cyber-yellow font-bold';
+                      else if (line.startsWith('===')) lineColor = 'text-cyber-blue';
+                      else if (line.startsWith(' •')) lineColor = 'text-slate-300';
+                      return <div key={i} className={lineColor}>{line}</div>;
+                    })}
                   </div>
                 )}
 
@@ -2128,7 +2467,7 @@ export default function App() {
                   onClick={() => {
                     const activeParticipants = roomState.members.filter(m => m.card_name !== 'Unregistered');
                     if (activeParticipants.length < 2) {
-                      alert("Tournament requires at least 2 players with registered champion cards.");
+                      toast({ type: 'warn', title: 'Not Enough Players', message: 'Tournament requires at least 2 players with registered champion cards.' });
                       return;
                     }
                     if (socket && socket.readyState === WebSocket.OPEN) {
@@ -2341,7 +2680,7 @@ export default function App() {
                   const code = generateRoomCode();
                   setIsPvp(true);
                   setLobbyId(code);
-                  connectRoomWebSocket(code, null);
+                  connectRoomWebSocket(code, null, true);
                   setActiveView('lobby');
                 }}
                 className="w-full py-4 rounded-xl bg-gradient-to-r from-cyber-purple to-cyber-blue hover:brightness-110 active:scale-98 font-bold font-mono text-sm uppercase tracking-wider text-black transition-all cursor-pointer shadow-[0_0_15px_rgba(0,240,255,0.3)] text-center"
@@ -2368,7 +2707,7 @@ export default function App() {
                   <button
                     onClick={() => {
                       if (!joinRoomCode.trim()) {
-                        alert("Please enter a Room Code");
+                        toast({ type: 'warn', title: 'Missing Code', message: 'Please enter a Room Code to join.' });
                         return;
                       }
                       const code = joinRoomCode.trim().toUpperCase();
@@ -2390,7 +2729,7 @@ export default function App() {
 
       {/* VIEW 4.5: TOURNAMENT ARENA */}
       {activeView === 'tournament' && roomState && roomState.tournament_matches && (
-        <div className="flex-1 flex flex-col gap-4 font-mono select-none overflow-hidden h-screen max-h-screen p-2">
+        <div className="flex-1 flex flex-col gap-4 font-mono select-none overflow-hidden h-dvh max-h-dvh p-2">
           {/* Header */}
           <div className="flex justify-between items-center bg-black/60 border border-white/10 px-4 py-2 rounded-xl text-xs shrink-0">
             <div>
@@ -2475,8 +2814,11 @@ export default function App() {
 
                       {/* VS Divider */}
                       <div className="flex flex-col items-center justify-center shrink-0">
-                        <div className="w-10 h-10 md:w-12 md:h-12 rounded-full border border-cyber-pink/55 flex items-center justify-center font-bold text-cyber-pink text-xs md:text-sm animate-pulse shadow-[0_0_15px_rgba(255,0,127,0.3)]">
-                          VS
+                        <div className="relative flex items-center justify-center">
+                          <div className="absolute w-10 h-10 md:w-12 md:h-12 rounded-full border border-cyber-pink/20 animate-vs-pulse" />
+                          <div className="w-10 h-10 md:w-12 md:h-12 rounded-full border border-cyber-pink/55 flex items-center justify-center font-bold text-cyber-pink text-xs md:text-sm shadow-[0_0_15px_rgba(255,0,127,0.3)] z-10">
+                            VS
+                          </div>
                         </div>
                       </div>
 
@@ -2515,7 +2857,7 @@ export default function App() {
                 // TOURNAMENT RESOLVED / CROWN CHAMPION
                 <div className="flex-1 flex flex-col justify-between items-center text-center py-6 min-h-0 gap-6">
                   <div className="flex-1 flex flex-col items-center justify-center">
-                    <div className="text-6xl md:text-7xl mb-4 animate-bounce-slow filter drop-shadow-[0_0_20px_rgba(255,251,0,0.4)]">🏆</div>
+                    <div className="text-6xl md:text-7xl mb-4 animate-bounce-slow" style={{ filter: 'drop-shadow(0 0 30px rgba(255,251,0,0.6)) drop-shadow(0 0 60px rgba(255,251,0,0.3))' }}>🏆</div>
                     
                     <h2 className="text-2xl md:text-3xl font-extrabold tracking-widest text-cyber-yellow font-mono uppercase mb-1 animate-pulse">
                       CHAMPION CROWNED!

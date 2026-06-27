@@ -686,10 +686,9 @@ async def websocket_room(websocket: WebSocket, lobby_id: str, client_id: str):
             
             if action == "register":
                 card_dict = data.get("card")
-                if card_dict:
-                    card = GameCard.model_validate(card_dict)
-                    session.register_member(client_id, card, websocket)
-                    await session.broadcast_state()
+                card = GameCard.model_validate(card_dict) if card_dict else None
+                session.register_member(client_id, card, websocket)
+                await session.broadcast_state()
                     
             elif action == "challenge":
                 target_id = data.get("target_id")
@@ -711,6 +710,16 @@ async def websocket_room(websocket: WebSocket, lobby_id: str, client_id: str):
             elif action == "decline_challenge":
                 session.reset_lobby_status()
                 await session.broadcast_state()
+
+            elif action == "start_tournament":
+                if client_id == session.owner_id:
+                    session.start_tournament()
+                    await session.broadcast_state()
+
+            elif action == "reset_tournament":
+                if client_id == session.owner_id:
+                    session.reset_tournament()
+                    await session.broadcast_state()
 
             elif action == "battle_action":
                 combat_move = data.get("combat_move")

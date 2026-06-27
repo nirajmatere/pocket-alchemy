@@ -190,10 +190,12 @@ async def transmute_image_to_card(image_bytes: bytes, filename: str, mime_type: 
     Takes raw image bytes, sends them to Gemini 2.5 Flash using Structured Outputs,
     performs stat balancing, generates stylized Imagen 3 artwork, and returns a fully validated GameCard.
     """
+    project_id = os.environ.get("GCP_PROJECT_ID")
+    location = os.environ.get("GCP_LOCATION", "asia-northeast1")
     api_key = os.environ.get("GEMINI_API_KEY", "")
     
-    if not api_key:
-        logger.warning("GEMINI_API_KEY is not set. Falling back to a random pre-baked card.")
+    if not project_id and not api_key:
+        logger.warning("Neither GCP_PROJECT_ID nor GEMINI_API_KEY is set. Falling back to a random pre-baked card.")
         card = random.choice(PRE_BAKED_CARDS)
         card_copy = card.model_copy(deep=True)
         # Give it a unique identity
@@ -211,7 +213,10 @@ async def transmute_image_to_card(image_bytes: bytes, filename: str, mime_type: 
 
     try:
         # Initialize Gemini Client
-        client = genai.Client(api_key=api_key)
+        if project_id:
+            client = genai.Client(vertexai=True, project=project_id, location=location)
+        else:
+            client = genai.Client(api_key=api_key)
         
         # Prepare system instruction with uniqueness and sub-element details
         system_instruction = (
@@ -335,10 +340,12 @@ async def fuse_cards(card1: GameCard, card2: GameCard, filename_seed: str) -> Ga
     Takes two GameCards and uses Gemini to synthesize a new, balanced hybrid card.
     Also calls Imagen 3 to generate custom artwork for the fused entity.
     """
+    project_id = os.environ.get("GCP_PROJECT_ID")
+    location = os.environ.get("GCP_LOCATION", "asia-northeast1")
     api_key = os.environ.get("GEMINI_API_KEY", "")
     
-    if not api_key:
-        logger.warning("GEMINI_API_KEY is not set. Creating manual mock card fusion.")
+    if not project_id and not api_key:
+        logger.warning("Neither GCP_PROJECT_ID nor GEMINI_API_KEY is set. Creating manual mock card fusion.")
         # Create a basic fusion card mock
         fused_stats = CardStats(
             health=card1.base_stats.health + card2.base_stats.health,
@@ -365,7 +372,10 @@ async def fuse_cards(card1: GameCard, card2: GameCard, filename_seed: str) -> Ga
         return fused
 
     try:
-        client = genai.Client(api_key=api_key)
+        if project_id:
+            client = genai.Client(vertexai=True, project=project_id, location=location)
+        else:
+            client = genai.Client(api_key=api_key)
         
         fusion_instruction = (
             "You are the Alchemical Fusion Chamber. Your job is to take two alchemical cards and fuse them into a single, "

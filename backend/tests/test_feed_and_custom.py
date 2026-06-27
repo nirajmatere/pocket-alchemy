@@ -1,3 +1,4 @@
+import os
 import pytest
 from fastapi.testclient import TestClient
 from backend.main import app, db_client
@@ -103,6 +104,10 @@ def test_user_segregation_local_db():
     assert "User B Card" in names_b
     assert "User A Card" not in names_b
 
+@pytest.mark.skipif(
+    not os.environ.get("GEMINI_API_KEY") and not os.environ.get("GCP_PROJECT_ID"),
+    reason="Skipping because Gemini API credentials are not configured in the environment"
+)
 def test_battle_agent_play_endpoint():
     """Verify that the Gemini-powered Managed Battle Agent can successfully play a turn."""
     # Ensure there's a card in inventory

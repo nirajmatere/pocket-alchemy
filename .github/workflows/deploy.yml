@@ -46,6 +46,7 @@ jobs:
       - name: Install Backend Deps
         run: |
           pip install -r requirements.txt
+          pip install pytest httpx
 
       - name: Run Backend Tests
         run: |

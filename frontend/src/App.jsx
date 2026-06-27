@@ -91,6 +91,10 @@ const SPARKS = [
   { left: '88%', delay: '0.6s', duration: '3.4s' }
 ];
 
+const generateRoomCode = () => {
+  return 'ROOM-' + Math.random().toString(36).slice(2, 6).toUpperCase();
+};
+
 export default function App() {
   const [clientId] = useState(() => {
     let id = sessionStorage.getItem('pocket_alchemy_client_id');
@@ -464,7 +468,10 @@ export default function App() {
     
     const currentMatch = matches[tournamentMatchIndex];
     let logIdx = 0;
-    setTournamentMatchLogs([currentMatch.logs[0]]);
+    
+    setTimeout(() => {
+      setTournamentMatchLogs([currentMatch.logs[0]]);
+    }, 0);
     
     const logInterval = setInterval(() => {
       logIdx++;
@@ -481,6 +488,7 @@ export default function App() {
     }, 400);
     
     return () => clearInterval(logInterval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tournamentRunningLocal, tournamentMatchIndex, roomState?.tournament_matches]);
 
   // Auto-prompt to select card when entering lobby without a champion
@@ -488,7 +496,9 @@ export default function App() {
     if (activeView === 'lobby' && roomState) {
       const myInfo = roomState.members?.find(m => m.client_id === clientId);
       if (myInfo && myInfo.card_name === 'Unregistered') {
-        setShowRoomCardSelectorModal(true);
+        setTimeout(() => {
+          setShowRoomCardSelectorModal(true);
+        }, 0);
       }
     }
   }, [activeView, roomState, clientId]);
@@ -2117,7 +2127,7 @@ export default function App() {
             <div className="space-y-6">
               <button
                 onClick={() => {
-                  const code = 'ROOM-' + Math.random().toString(36).slice(2, 6).toUpperCase();
+                  const code = generateRoomCode();
                   setIsPvp(true);
                   setLobbyId(code);
                   connectRoomWebSocket(code, null);

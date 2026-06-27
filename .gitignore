@@ -39,3 +39,6 @@ battle_history.json
 player_profile.json
 uniqueness_leaderboard.json
 .vite/
+
+# Docs
+hackathon_guide/

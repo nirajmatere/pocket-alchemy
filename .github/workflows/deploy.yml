@@ -1,0 +1,99 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - development
+  pull_request:
+    branches:
+      - main
+      - development
+
+jobs:
+  ci:
+    name: Continuous Integration (Lint, Build, Test)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Frontend Deps
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Lint Frontend
+        run: |
+          cd frontend
+          npm run lint
+
+      - name: Build Frontend
+        run: |
+          cd frontend
+          npm run build
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Backend Deps
+        run: |
+          pip install -r requirements.txt
+          pip install pytest httpx
+
+      - name: Run Backend Tests
+        run: |
+          PYTHONPATH=. pytest backend/tests/
+
+  cd:
+    name: Continuous Deployment (GCP Cloud Run)
+    needs: ci
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install & Build Frontend
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker authentication for GCR
+        run: |
+          gcloud auth configure-docker --quiet
+
+      - name: Build and Push Docker Image
+        run: |
+          IMAGE_NAME="gcr.io/${{ secrets.GCP_PROJECT_ID }}/pocket-alchemy-backend:${{ github.sha }}"
+          docker build -t "$IMAGE_NAME" .
+          docker push "$IMAGE_NAME"
+
+      - name: Deploy to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: pocket-alchemy-backend
+          image: gcr.io/${{ secrets.GCP_PROJECT_ID }}/pocket-alchemy-backend:${{ github.sha }}
+          region: asia-northeast1
+          flags: --allow-unauthenticated

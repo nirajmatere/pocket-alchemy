@@ -32,3 +32,10 @@ Thumbs.db
 
 # Uploads (user generated)
 backend/uploads/
+
+# GCP credentials & Local game state files
+backend/gcp-key.json
+battle_history.json
+player_profile.json
+uniqueness_leaderboard.json
+.vite/

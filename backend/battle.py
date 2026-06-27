@@ -24,36 +24,123 @@ MULTIPLIERS = {
 def get_element_multiplier(attacker_element: str, defender_element: str) -> float:
     return MULTIPLIERS.get((attacker_element, defender_element), 1.0)
 
-# --- Default AI Bosses (for PvE) ---
-AI_BOSSES = [
+# --- Default AI Bosses (Campaign Stages 1 to 10) ---
+CAMPAIGN_BOSSES = [
     GameCard(
-        card_name="Tokyo Tower Golem",
+        card_name="Akihabara Maid Golem",
+        element="Lightning",
+        base_stats=CardStats(health=150, attack=50, speed=50),
+        ability_name="Moe Moe Discharge",
+        effect_type="damage",
+        value=20,
+        lore="Constructed from spare arcade motherboards. Distributes tea and electric shocks in equal measures.",
+        sub_element="Plasma",
+        rarity="Common"
+    ),
+    GameCard(
+        card_name="Sumo Steam Roller",
         element="Earth",
-        base_stats=CardStats(health=350, attack=60, speed=40),
-        ability_name="Neon Fortification",
+        base_stats=CardStats(health=180, attack=60, speed=40),
+        ability_name="Heavy Sumo Slam",
         effect_type="shield",
-        value=30,
-        lore="An iron construct infused with Tokyo's neon skyline. Slow but incredibly durable."
+        value=0,
+        lore="A heavy alchemical engine designed in Ryogoku. Crushes standard decks with earth-shattering pressure.",
+        sub_element="Quartz",
+        rarity="Common"
+    ),
+    GameCard(
+        card_name="Shibuya Crossing Spirit",
+        element="Neutral",
+        base_stats=CardStats(health=200, attack=70, speed=65),
+        ability_name="Crosswalk Slipstream",
+        effect_type="boost_speed",
+        value=20,
+        lore="Born from the footprints of Tokyo's busiest crossing. Moves in chaotic speed bursts.",
+        sub_element="Aether",
+        rarity="Rare"
     ),
     GameCard(
         card_name="Suntory Shogun",
         element="Fire",
-        base_stats=CardStats(health=240, attack=90, speed=70),
-        ability_name="Whisky Burnout",
+        base_stats=CardStats(health=230, attack=80, speed=60),
+        ability_name="Whisky Flareup",
         effect_type="boost_attack",
         value=20,
-        lore="An alchemical warrior powered by local highballs and caffeinated energy drinks. Deals high damage."
+        lore="Fuelled by vending machine highballs. Increases raw combat power rapidly.",
+        sub_element="Plasma",
+        rarity="Rare"
     ),
     GameCard(
-        card_name="Pixelated Kappa",
-        element="Water",
-        base_stats=CardStats(health=280, attack=70, speed=90),
-        ability_name="Digital Splash",
+        card_name="Asakusa Lantern Dragon",
+        element="Fire",
+        base_stats=CardStats(health=260, attack=90, speed=55),
+        ability_name="Senzoji Red Ember",
         effect_type="damage",
-        value=35,
-        lore="A digital trickster emerging from Sumida River. Uses holographic water blasts to disrupt opponents."
+        value=30,
+        lore="A celestial dragon manifesting from the giant red lanterns of Asakusa. Radiates immense fire energy.",
+        sub_element="Plasma",
+        rarity="Rare"
+    ),
+    GameCard(
+        card_name="Meiji Forest Tengu",
+        element="Earth",
+        base_stats=CardStats(health=290, attack=100, speed=80),
+        ability_name="Wind Gale Deflection",
+        effect_type="shield",
+        value=0,
+        lore="An ancient bird-spirit guarding the Meiji Shrine woods. Swift and highly protective.",
+        sub_element="Quartz",
+        rarity="Epic"
+    ),
+    GameCard(
+        card_name="Tsukiji Kraken",
+        element="Water",
+        base_stats=CardStats(health=320, attack=110, speed=70),
+        ability_name="Wasabi Splash",
+        effect_type="damage",
+        value=40,
+        lore="A gargantuan squid hiding in the outer seafood market docks. Deals spicy water damage.",
+        sub_element="Vapor",
+        rarity="Epic"
+    ),
+    GameCard(
+        card_name="Shinkansen Oni",
+        element="Lightning",
+        base_stats=CardStats(health=350, attack=125, speed=110),
+        ability_name="Super-Express Strike",
+        effect_type="boost_speed",
+        value=30,
+        lore="An alchemical demon fused with a bullet train. Striking with lightning speed.",
+        sub_element="Plasma",
+        rarity="Epic"
+    ),
+    GameCard(
+        card_name="Kabukicho Neon Drake",
+        element="Water",
+        base_stats=CardStats(health=400, attack=140, speed=95),
+        ability_name="Cyber-Glow Heal",
+        effect_type="heal",
+        value=45,
+        lore="A cybernetic serpent reflecting the neon lights of Shinjuku. Absorbs ambient light to mend wounds.",
+        sub_element="Vapor",
+        rarity="Legendary"
+    ),
+    GameCard(
+        card_name="The Ultimate Hackathon Judge",
+        element="Neutral",
+        base_stats=CardStats(health=500, attack=160, speed=100),
+        ability_name="No-Code Dismissal",
+        effect_type="damage",
+        value=60,
+        lore="The final gatekeeper. Armed with clipboard matrix diagnostics. One glance will dissolve standard systems.",
+        sub_element="Aether",
+        rarity="Legendary"
     )
 ]
+
+# Legacy fallback for old references
+AI_BOSSES = CAMPAIGN_BOSSES[:3]
+
 
 class ActiveFighter:
     """Tracks active combat stats, shielding, and temporary buffs of a card during a match."""
@@ -69,12 +156,17 @@ class ActiveFighter:
         self.ability_cooldown = 0
         self.attack_buff = 0
         self.speed_buff = 0
+        self.stance: Optional[str] = "focused"  # default stance: "aggressive", "defensive", "focused"
 
     def apply_damage(self, damage: int) -> int:
         if self.shield_active:
             self.shield_active = False
             return 0  # Damage fully blocked
-        actual_damage = max(5, int(damage))
+            
+        # Defensive stance flat damage reduction
+        flat_reduction = 15 if self.stance == "defensive" else 0
+        actual_damage = max(5, int(damage) - flat_reduction)
+        
         self.current_health = max(0, self.current_health - actual_damage)
         return actual_damage
 
@@ -89,12 +181,16 @@ class ActiveFighter:
 
     def tick_cooldown(self):
         if self.ability_cooldown > 0:
-            self.ability_cooldown -= 1
+            # Focused stance decreases cooldown twice as fast
+            decrement = 2 if self.stance == "focused" else 1
+            self.ability_cooldown = max(0, self.ability_cooldown - decrement)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "card_name": self.card.card_name,
             "element": self.card.element,
+            "sub_element": self.card.sub_element,
+            "rarity": self.card.rarity,
             "max_health": self.max_health,
             "current_health": self.current_health,
             "attack": self.attack + self.attack_buff,
@@ -105,7 +201,9 @@ class ActiveFighter:
             "effect_type": self.card.effect_type,
             "value": self.card.value,
             "lore": self.card.lore,
-            "image_url": self.card.image_url
+            "image_url": self.card.image_url,
+            "image_art_url": self.card.image_art_url,
+            "stance": self.stance
         }
 
 def generate_post_match_analysis(winner: ActiveFighter, loser: ActiveFighter) -> str:
@@ -125,20 +223,24 @@ def generate_post_match_analysis(winner: ActiveFighter, loser: ActiveFighter) ->
         
     ability_reason = f" • Special Activation: Leveraging alchemical skill '{winner.card.ability_name}' ({winner.card.effect_type}) turned the tides of battle."
 
+    stance_reason = f" • Tactical Stance: Stance '{winner.stance}' provided crucial mechanical support."
+
     return (
         f"🏆 {w_name} defeated {l_name}!\n"
         f"=== ALCHEMICAL COMBAT DEBRIEF ===\n"
         f"{elem_reason}\n"
         f"{speed_reason}\n"
-        f"{ability_reason}"
+        f"{ability_reason}\n"
+        f"{stance_reason}"
     )
 
 
 class BattleSession:
     """Manages a single battle room serving multiple members (Lobby, Challenges, Spectators, Fights)."""
-    def __init__(self, lobby_id: str, player1_card: GameCard, is_pvp: bool = False, opponent_card: GameCard = None):
+    def __init__(self, lobby_id: str, player1_card: GameCard, is_pvp: bool = False, opponent_card: GameCard = None, campaign_stage: Optional[int] = None):
         self.lobby_id = lobby_id
         self.is_pvp = is_pvp
+        self.campaign_stage = campaign_stage
         
         # Members dictionary: client_id -> {"card": GameCard, "status": str, "ws": WebSocket}
         self.members: Dict[str, Dict[str, Any]] = {}
@@ -148,14 +250,17 @@ class BattleSession:
         self.player2: Optional[ActiveFighter] = None
         self.player1_id: Optional[str] = None
         self.player2_id: Optional[str] = None
-        self.player1_action: Optional[str] = None
-        self.player2_action: Optional[str] = None
+        
+        # Actions locked: {"action": "attack"/"ability", "stance": "aggressive"/"defensive"/"focused"}
+        self.player1_action: Optional[Dict[str, str]] = None
+        self.player2_action: Optional[Dict[str, str]] = None
         
         self.round_number = 1
         self.game_over = False
         self.winner = ""
         self.combat_logs = []
         self.post_match_summary = ""
+        self.rewards = {}
 
         # Pre-populate player 1 if card provided
         if player1_card:
@@ -170,10 +275,15 @@ class BattleSession:
 
         # Pre-populate solo battle if not PvP
         if not is_pvp:
-            opp_card = opponent_card if opponent_card else random.choice(AI_BOSSES)
+            if campaign_stage is not None and 1 <= campaign_stage <= len(CAMPAIGN_BOSSES):
+                opp_card = CAMPAIGN_BOSSES[campaign_stage - 1]
+                self.combat_logs = [f"Campaign Stage {campaign_stage} started! You face {opp_card.card_name}."]
+            else:
+                opp_card = opponent_card if opponent_card else random.choice(AI_BOSSES)
+                self.combat_logs = [f"Solo Match started! You face {opp_card.card_name}."]
+                
             self.player2 = ActiveFighter(opp_card)
             self.player2_id = "boss"
-            self.combat_logs = [f"Solo Match started! You face {self.player2.card.card_name}."]
 
     def join_opponent(self, card: GameCard):
         """Allows direct opponent assignment (used for non-lobby or test scenarios)."""
@@ -196,7 +306,6 @@ class BattleSession:
         }
         # If is_pvp and player 1 ID is not registered or is the "1" placeholder, assign it
         if self.is_pvp and (not self.player1_id or self.player1_id == "1"):
-            # Clean up the placeholder key if it exists
             if "1" in self.members and client_id != "1":
                 del self.members["1"]
             self.player1_id = client_id
@@ -220,7 +329,6 @@ class BattleSession:
         if challenger_id not in self.members or target_id not in self.members:
             return False
         
-        # Update statuses
         self.members[challenger_id]["status"] = "challenging"
         self.members[target_id]["status"] = "challenged"
         return True
@@ -243,54 +351,76 @@ class BattleSession:
         self.game_over = False
         self.winner = ""
         self.post_match_summary = ""
+        self.rewards = {}
         self.combat_logs = [f"⚔️ Match started: {self.player1.card.card_name} vs {self.player2.card.card_name}!"]
         return True
 
-    def select_action(self, client_id: Any, action: str) -> bool:
-        """Registers a fighter action. Returns True if both are locked in."""
+    def select_action(self, client_id: Any, action: str, stance: str = "focused") -> bool:
+        """Registers a fighter action and stance. Returns True if both are locked in."""
         if self.game_over:
             return False
 
+        action_struct = {"action": action, "stance": stance}
+
         if not self.is_pvp:
             # Solo Match action registration
-            self.player1_action = action
-            boss_action = "attack"
-            if self.player2.ability_cooldown == 0 and random.random() < 0.35:
-                boss_action = "ability"
-            self.player2_action = boss_action
+            self.player1_action = action_struct
+            
+            # Solo AI stance selection
+            boss_stance = random.choice(["aggressive", "defensive", "focused"])
+            boss_move = "attack"
+            if self.player2.ability_cooldown == 0 and random.random() < 0.4:
+                boss_move = "ability"
+            
+            self.player2_action = {"action": boss_move, "stance": boss_stance}
             return True
 
         # PvP action registration
         if client_id == 1 or client_id == "1" or client_id == self.player1_id:
-            self.player1_action = action
-            self.combat_logs.append(f"⚡ {self.player1.card.card_name} locked their action.")
+            self.player1_action = action_struct
+            self.combat_logs.append(f"⚡ {self.player1.card.card_name} locked in their turn action.")
         elif client_id == 2 or client_id == "2" or client_id == self.player2_id:
-            self.player2_action = action
-            self.combat_logs.append(f"⚡ {self.player2.card.card_name} locked their action.")
+            self.player2_action = action_struct
+            self.combat_logs.append(f"⚡ {self.player2.card.card_name} locked in their turn action.")
             
         return self.player1_action is not None and self.player2_action is not None
 
     def execute_round(self):
-        """Resolves the turn round in speed order."""
+        """Resolves the turn round in speed order with tactical stance modifiers."""
         if self.game_over or not self.player1 or not self.player2:
             return
+
+        # Apply locked stances to ActiveFighter objects
+        self.player1.stance = self.player1_action["stance"]
+        self.player2.stance = self.player2_action["stance"]
 
         self.player1.tick_cooldown()
         self.player2.tick_cooldown()
 
-        p1_action = self.player1_action
-        p2_action = self.player2_action
+        p1_action = self.player1_action["action"]
+        p2_action = self.player2_action["action"]
 
-        # Speed ordering
+        # Calculate modified speeds based on stance
         p1_spd = self.player1.speed + self.player1.speed_buff
+        if self.player1.stance == "focused":
+            p1_spd = int(p1_spd * 1.25)
+        elif self.player1.stance == "aggressive":
+            p1_spd = int(p1_spd * 0.9)
+
         p2_spd = self.player2.speed + self.player2.speed_buff
-        
+        if self.player2.stance == "focused":
+            p2_spd = int(p2_spd * 1.25)
+        elif self.player2.stance == "aggressive":
+            p2_spd = int(p2_spd * 0.9)
+
+        # Speed ordering resolution
         if p1_spd == p2_spd:
             p1_first = random.choice([True, False])
         else:
             p1_first = p1_spd > p2_spd
 
         self.combat_logs.append(f"--- Resolve Round {self.round_number} ---")
+        self.combat_logs.append(f"📣 Stance Active: {self.player1.card.card_name} [{self.player1.stance.upper()}] | {self.player2.card.card_name} [{self.player2.stance.upper()}]")
 
         first_fighter = self.player1 if p1_first else self.player2
         first_action = p1_action if p1_first else p2_action
@@ -308,6 +438,7 @@ class BattleSession:
             self.winner = first_label
             self.combat_logs.append(f"🏆 {first_fighter.card.card_name} wins the match!")
             self.post_match_summary = generate_post_match_analysis(first_fighter, second_fighter)
+            self.calculate_rewards(first_label)
             self.reset_lobby_status()
             return
 
@@ -319,6 +450,7 @@ class BattleSession:
             self.winner = second_label
             self.combat_logs.append(f"🏆 {second_fighter.card.card_name} wins the match!")
             self.post_match_summary = generate_post_match_analysis(second_fighter, first_fighter)
+            self.calculate_rewards(second_label)
             self.reset_lobby_status()
             return
 
@@ -327,12 +459,19 @@ class BattleSession:
         self.player2_action = None
 
     def resolve_action(self, attacker: ActiveFighter, defender: ActiveFighter, action: str):
-        """Calculates normal hits or alchemical spell effects."""
+        """Calculates normal hits or alchemical spell effects factoring in active stance modifiers."""
         if attacker.current_health <= 0:
             return
 
         if action == "attack":
             base_dmg = attacker.attack + attacker.attack_buff
+            
+            # Stance damage multipliers
+            if attacker.stance == "aggressive":
+                base_dmg = int(base_dmg * 1.2)
+            elif attacker.stance == "defensive":
+                base_dmg = int(base_dmg * 0.8)
+                
             variance = random.uniform(0.9, 1.1)
             raw_dmg = base_dmg * variance
             mult = get_element_multiplier(attacker.card.element, defender.card.element)
@@ -342,14 +481,21 @@ class BattleSession:
             actual_dmg = defender.apply_damage(final_dmg)
             
             elem_msg = f" ({mult}x Element Match!)" if mult > 1.0 else f" ({mult}x Disadvantage)" if mult < 1.0 else ""
+            stance_msg = " [AGGRESSIVE Strike]" if attacker.stance == "aggressive" else " [DEFENSIVE Poke]" if attacker.stance == "defensive" else ""
+            
             if blocked:
                 self.combat_logs.append(f"🛡️ {defender.card.card_name} blocked {attacker.card.card_name}'s strike!")
             else:
-                self.combat_logs.append(f"⚔️ {attacker.card.card_name} hits {defender.card.card_name} for {actual_dmg} damage!{elem_msg}")
+                self.combat_logs.append(f"⚔️ {attacker.card.card_name} hits {defender.card.card_name} for {actual_dmg} damage!{elem_msg}{stance_msg}")
 
         elif action == "ability":
             eff = attacker.card.effect_type
             val = attacker.card.value
+            
+            # Ability value slight buff if aggressive, or extra speed focus
+            if attacker.stance == "aggressive" and eff == "damage":
+                val = int(val * 1.15)
+                
             ability_name = attacker.card.ability_name
             self.combat_logs.append(f"✨ {attacker.card.card_name} casts {ability_name}!")
             
@@ -370,6 +516,41 @@ class BattleSession:
                 self.combat_logs.append(f"🛡️ Alchemical shield active! Blocks next normal strike.")
             
             attacker.reset_cooldown()
+
+    def calculate_rewards(self, winner_label: str):
+        """Generates match rewards (aether dust, catalysts) for the winner."""
+        # For PvP, rewards go to player1 or player2. For Campaign, player1 is the user.
+        self.rewards = {
+            "aether_dust": 0,
+            "catalysts": 0,
+            "unlocked_stage": None
+        }
+        
+        # Determine if Player 1 (user) won
+        p1_won = (winner_label == "Player 1")
+        
+        if p1_won:
+            # Base aether dust reward
+            dust = random.randint(40, 80)
+            
+            # Add multiplier if beating a campaign stage
+            if self.campaign_stage is not None:
+                # Stage reward multiplier
+                stage_mult = 1.0 + (self.campaign_stage * 0.2)
+                dust = int(dust * stage_mult)
+                
+                # Check catalyst drop chance (increases on higher campaign stages)
+                catalyst_chance = 0.3 + (self.campaign_stage * 0.05)
+                catalysts = 1 if random.random() < catalyst_chance else 0
+                
+                self.rewards["unlocked_stage"] = self.campaign_stage + 1
+            else:
+                # PvP or random PvE match rewards
+                catalysts = 1 if random.random() < 0.25 else 0
+                
+            self.rewards["aether_dust"] = dust
+            self.rewards["catalysts"] = catalysts
+            self.combat_logs.append(f"🎁 Reward Awarded: +{dust} Aether Dust, +{catalysts} Fusion Catalysts!")
 
     def reset_lobby_status(self):
         """Returns fighting players back to spectating status after a match."""
@@ -401,7 +582,9 @@ class BattleSession:
                 "game_over": self.game_over,
                 "winner": self.winner,
                 "logs": self.combat_logs[-10:],
-                "post_match_summary": self.post_match_summary
+                "post_match_summary": self.post_match_summary,
+                "rewards": self.rewards,
+                "campaign_stage": self.campaign_stage
             }
             
         payload = {

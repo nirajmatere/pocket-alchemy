@@ -362,5 +362,365 @@
     "value": 35,
     "lore": "This digital guardian holds the very essence of connection, unlocking vast computational power. Its glowing lines of code are conduits for raw data, ready to empower its allies.",
     "image_url": "/uploads/54f57182-dd06-4814-8740-4ce0a8e30ba9.jpg"
+  },
+  {
+    "card_name": "Kindle of Ancient Lore",
+    "element": "Neutral",
+    "base_stats": {
+      "health": 90,
+      "attack": 40,
+      "speed": 120
+    },
+    "ability_name": "Chishiki no Hikari",
+    "effect_type": "boost_speed",
+    "value": 30,
+    "lore": "This ancient e-reader, imbued with the spirit of countless forgotten texts, grants its wielder unparalleled insight. Its digital pages whisper secrets, allowing for swift tactical maneuvers and strategic foresight.",
+    "image_url": "/uploads/242191cf-d5a0-45a6-be3c-a7ba4d0fc4a1.jpg",
+    "uniqueness_score": 55,
+    "uniqueness_reason": "A common e-reader found in a distinct Japanese setting, hinting at localized knowledge and cultural context.",
+    "sub_element": "Aether",
+    "rarity": "Rare",
+    "image_art_url": null,
+    "imagen_prompt": "A mystical, glowing black e-reader, its screen displaying ancient Kanji symbols and ethereal script, floats amidst a serene, moonlit Japanese tatami room, surrounded by swirling Aether mist and subtle cherry blossom petals, in an anime fantasy trading card style."
+  },
+  {
+    "card_name": "Suica Overlord Ninja",
+    "element": "Quartz",
+    "base_stats": {
+      "health": 85,
+      "attack": 100,
+      "speed": 85
+    },
+    "ability_name": "Quartz Gate Stun",
+    "effect_type": "damage",
+    "value": 45,
+    "lore": "When a lightning-fast Suica card was accidentally swiped across the ancient, clicky mechanical keyboard of a sleep-deprived coder, the resulting alchemical surge fused them into a single entity. Now, every 'beep' of the Suica Overlord Ninja resonates with the earth-shattering force of heavy steel switches, capable of stunning foes and disrupting their very foundations.",
+    "image_url": "/uploads/57f3f4b7-6bf1-4500-b0f1-28aa11f68155.jpg",
+    "uniqueness_score": 85,
+    "uniqueness_reason": "The fusion of a common transit card with a powerful, bespoke mechanical keyboard creates a unique blend of everyday utility and overwhelming digital might.",
+    "sub_element": "Aether",
+    "rarity": "Legendary",
+    "image_art_url": null,
+    "imagen_prompt": "A sleek, cyberpunk ninja figure, cloaked in a lightning-infused transit card aesthetic, wields heavy, glowing mechanical keyboard switches as weapons. The ground beneath it cracks with quartz energy, showing both incredible speed and immense earth impact."
+  },
+  {
+    "card_name": "Sonic Anchor",
+    "element": "Lightning",
+    "base_stats": {
+      "health": 80,
+      "attack": 90,
+      "speed": 80
+    },
+    "ability_name": "Tatami Resonance",
+    "effect_type": "boost_attack",
+    "value": 30,
+    "lore": "Forged from the echoes of ancient Japanese temples and modern sonic tech, the Sonic Anchor amplifies any ally's voice into a devastating wave, resonating with the very ground it stands upon.",
+    "image_url": "/uploads/946d5211-3c2f-4c05-befd-15c9038f34f5.jpg",
+    "uniqueness_score": 60,
+    "uniqueness_reason": "A common portable speaker found within a distinctly Japanese traditional room setting, adding a touch of cultural contrast.",
+    "sub_element": "Aether",
+    "rarity": "Rare",
+    "image_art_url": null,
+    "imagen_prompt": "A sleek, dark alchemical speaker pulsating with vibrant sonic energy, floating amidst a serene, glowing cyberpunk Japanese tatami room, anime fantasy trading card style."
+  },
+  {
+    "card_name": "Misty Vision Vial",
+    "element": "Water",
+    "base_stats": {
+      "health": 70,
+      "attack": 60,
+      "speed": 120
+    },
+    "ability_name": "Me no Hikari",
+    "effect_type": "heal",
+    "value": 30,
+    "lore": "Distilled from the purest mountain springs of the Eastern Isles, this potent elixir grants unparalleled clarity and soothes the most strained gazes, revealing hidden truths.",
+    "image_url": "/uploads/b4df8eda-aae3-4f5f-92d3-eb1aaa113a88.jpg",
+    "uniqueness_score": 55,
+    "uniqueness_reason": "A common medical item presented within a distinct traditional Japanese interior, elevating its context beyond the mundane.",
+    "sub_element": "Vapor",
+    "rarity": "Rare",
+    "image_art_url": null,
+    "imagen_prompt": "A glowing vial of 'I-DEW DS Aquagel' eye drops, shimmering with ethereal blue light, floats above a serene traditional Japanese tatami room, surrounded by swirling mists and ancient cherry blossoms, anime fantasy trading card style."
+  },
+  {
+    "card_name": "Craft Boss: Latte Jolt",
+    "element": "Earth",
+    "base_stats": {
+      "health": 80,
+      "attack": 60,
+      "speed": 110
+    },
+    "ability_name": "Bossu no Chikara",
+    "effect_type": "boost_speed",
+    "value": 35,
+    "lore": "Brewed from the finest alchemical beans, the Craft Boss Latte grants a sudden surge of focus and energy, embodying the unwavering spirit of its namesake. Its rich flavor invigorates both mind and body.",
+    "image_url": "/uploads/a325bd0e-0782-4fbd-a727-238ce812e381.jpg",
+    "uniqueness_score": 60,
+    "uniqueness_reason": "A popular and iconic Japanese convenience store beverage, making it a culturally significant but not extremely rare find.",
+    "sub_element": "Aether",
+    "rarity": "Rare",
+    "image_art_url": null,
+    "imagen_prompt": "A mystical, glowing Craft Boss Cafe Latte bottle, stylized as an ancient alchemical elixir, radiating golden energy sparks. It floats amidst a vibrant, bustling Tokyo street at night, with neon signs and cherry blossoms, in an anime fantasy trading card style."
+  },
+  {
+    "card_name": "Rainier's Mountain Brew",
+    "element": "Earth",
+    "base_stats": {
+      "health": 90,
+      "attack": 80,
+      "speed": 80
+    },
+    "ability_name": "Mezame no Latte",
+    "effect_type": "boost_speed",
+    "value": 35,
+    "lore": "Brewed from beans grown on the mystical slopes of Mt. Rainier, this latte grants a temporary surge of focus and vitality, awakening the spirit for battle.",
+    "image_url": "/uploads/64a0df73-0f8b-4e46-8f48-3967347b7d0a.jpg",
+    "uniqueness_score": 60,
+    "uniqueness_reason": "A common Japanese convenience store beverage, recognizable but not exceptionally rare or custom.",
+    "sub_element": "Aether",
+    "rarity": "Rare",
+    "image_art_url": null,
+    "imagen_prompt": "A mystical, steaming Mt. Rainier Caffe Latte cup, adorned with glowing mountain runes, floats amidst a serene, misty Japanese mountain landscape at dawn, anime fantasy trading card style."
+  },
+  {
+    "card_name": "Aether Gazer",
+    "element": "Neutral",
+    "base_stats": {
+      "health": 90,
+      "attack": 80,
+      "speed": 80
+    },
+    "ability_name": "Aetheric Focus",
+    "effect_type": "boost_attack",
+    "value": 30,
+    "lore": "This individual possesses a rare connection to the Aether, allowing them to perceive hidden truths and channel pure thought into tactical advantage. Their calm demeanor belies a mind capable of profound insight.",
+    "image_url": "/uploads/4f4bd976-7098-4894-bd2d-75fdf28473af.jpg",
+    "uniqueness_score": 75,
+    "uniqueness_reason": "The subject is a unique human individual, captured in a live, unposed moment, making it more distinct than a common object.",
+    "sub_element": "Aether",
+    "rarity": "Epic",
+    "image_art_url": null,
+    "imagen_prompt": "A wise alchemist, with a calm expression and subtle arcane glow, stands within a swirling vortex of Aether, surrounded by floating runic symbols, in a vibrant fantasy trading card style."
+  },
+  {
+    "card_name": "Shadow Weaver",
+    "element": "Neutral",
+    "base_stats": {
+      "health": 80,
+      "attack": 90,
+      "speed": 80
+    },
+    "ability_name": "Focusing Charm",
+    "effect_type": "boost_attack",
+    "value": 35,
+    "lore": "A quiet alchemist whose silver pendant channels focused intent, allowing them to strike with unexpected precision in the heat of battle.",
+    "image_url": "/uploads/0c439838-3426-401a-b18a-cc4c7ca7e841.jpg",
+    "uniqueness_score": 80,
+    "uniqueness_reason": "A direct capture of a human subject, featuring unique personal style and a distinctive silver pendant, making it an epic find.",
+    "sub_element": "Aether",
+    "rarity": "Epic",
+    "image_art_url": null,
+    "imagen_prompt": "A stoic alchemist with dark, flowing hair and a piercing gaze, wearing a black tunic and a glowing silver circular pendant, standing in a dimly lit alchemical laboratory filled with arcane symbols and swirling ethereal mist, anime fantasy trading card style."
+  },
+  {
+    "card_name": "Famichiki Phoenix",
+    "element": "Fire",
+    "base_stats": {
+      "health": 120,
+      "attack": 70,
+      "speed": 60
+    },
+    "ability_name": "Crispy Heal",
+    "effect_type": "heal",
+    "value": 35,
+    "lore": "The legendary crispy treat of Famima convenience stores. Transmutes greasy goodness into pure vitality and raw combat morale.",
+    "image_url": "/uploads/d9236bba-6537-4b50-8704-d62b05a8db2b.jpg",
+    "uniqueness_score": 82,
+    "uniqueness_reason": "\u2728 [Daily Quest Bonus!] Popular fried chicken from a local convenience store.",
+    "sub_element": "Vapor",
+    "rarity": "Rare",
+    "image_art_url": null,
+    "imagen_prompt": "A phoenix bird made of golden, glowing, crispy elements rising from a convenience store food heater."
+  },
+  {
+    "card_name": "Focused Developer",
+    "element": "Neutral",
+    "base_stats": {
+      "health": 80,
+      "attack": 90,
+      "speed": 80
+    },
+    "ability_name": "Sh\u016bch\u016b-ryoku B\u016bsuto",
+    "effect_type": "boost_attack",
+    "value": 30,
+    "lore": "This alchemist channels the mundane energy of endless lines of code into potent mental attacks, turning complex problems into raw arcane power. Their unwavering focus can turn the tide of any intellectual battle.",
+    "image_url": "/uploads/83d76673-67d1-4c45-ae0a-1e6c9f50c2ff.jpg",
+    "uniqueness_score": 75,
+    "uniqueness_reason": "A direct human portrait in a common office setting, capturing a moment of focused presence, hinting at a localized context.",
+    "sub_element": "Quartz",
+    "rarity": "Epic",
+    "image_art_url": null,
+    "imagen_prompt": "A cyberpunk alchemist, with glowing eyes of concentration, surrounded by holographic code snippets and arcane symbols, seated at a futuristic desk in a neon-lit Tokyo office, anime fantasy trading card style."
+  },
+  {
+    "card_name": "The Focused Dev",
+    "element": "Neutral",
+    "base_stats": {
+      "health": 80,
+      "attack": 70,
+      "speed": 100
+    },
+    "ability_name": "Strategic Insight",
+    "effect_type": "boost_attack",
+    "value": 30,
+    "lore": "A keen-eyed alchemist, whose focus is as unyielding as the denim he wears, can discern the weakest points in any foe's defenses, turning observation into overwhelming power.",
+    "image_url": "/uploads/01530abe-3bab-4e0c-b8ce-116ff6796c6f.jpg",
+    "uniqueness_score": 75,
+    "uniqueness_reason": "A human subject with a clear, focused expression, wearing branded apparel in a typical office environment, making it distinct but not exceptionally rare.",
+    "sub_element": "Quartz",
+    "rarity": "Epic",
+    "image_art_url": null,
+    "imagen_prompt": "A stylized alchemical trading card depicting a focused male alchemist with glowing spectacles, wearing a rugged, enchanted denim tunic, surrounded by ethereal energy sigils in a futuristic, illuminated research lab, anime fantasy style."
+  },
+  {
+    "card_name": "The Gaze of the Architect",
+    "element": "Neutral",
+    "base_stats": {
+      "health": 80,
+      "attack": 70,
+      "speed": 100
+    },
+    "ability_name": "Focused Insight",
+    "effect_type": "boost_attack",
+    "value": 30,
+    "lore": "A master of intricate designs, this alchemist's keen intellect allows them to perceive weaknesses and exploit them with surgical precision. Their calm demeanor belies a mind constantly calculating the next move.",
+    "image_url": "/uploads/dc9633d3-be94-4436-9e13-f5044f452c81.jpg",
+    "uniqueness_score": 60,
+    "uniqueness_reason": "A human face, while inherently unique, is presented in a standard office environment, making it moderately rare.",
+    "sub_element": "Aether",
+    "rarity": "Rare",
+    "image_art_url": null,
+    "imagen_prompt": "A wise alchemist with glowing spectacles, their eyes radiating focused energy, stands in a futuristic, softly lit data center, surrounded by ethereal code streams, in a cyberpunk fantasy trading card style."
+  },
+  {
+    "card_name": "Aura of Serenity",
+    "element": "Neutral",
+    "base_stats": {
+      "health": 90,
+      "attack": 70,
+      "speed": 90
+    },
+    "ability_name": "Heiwa no Sign",
+    "effect_type": "shield",
+    "value": 35,
+    "lore": "This enigmatic figure radiates an aura of calm, her peace sign deflecting negativity. Within the bustling alchemical labs, her presence brings focus and protection to all.",
+    "image_url": "/uploads/68f0dbc4-696e-4c9d-a4b0-1cde98c110ae.jpg",
+    "uniqueness_score": 80,
+    "uniqueness_reason": "A clear, expressive human face making a culturally significant peace sign gesture in an office setting makes this object visually distinct and engaging.",
+    "sub_element": "Aether",
+    "rarity": "Epic",
+    "image_art_url": null,
+    "imagen_prompt": "A serene alchemist with golden-rimmed glasses and a gentle smile, making a glowing peace sign with her hand, surrounded by a soft, ethereal aura. She stands in a futuristic, minimalist office bathed in warm, ambient light, depicted in a detailed anime fantasy trading card style."
+  },
+  {
+    "card_name": "Suica Ninja",
+    "element": "Lightning",
+    "base_stats": {
+      "health": 70,
+      "attack": 60,
+      "speed": 120
+    },
+    "ability_name": "Gate Rush",
+    "effect_type": "boost_speed",
+    "value": 25,
+    "lore": "A sleek alchemical slate that grants lightning-fast travel through the Tokyo transit grid. Beeps with raw lightning power.",
+    "image_url": "/uploads/0cdc90b8-3ccc-46a7-b6ec-e1e0e5e23950.jpg",
+    "uniqueness_score": 75,
+    "uniqueness_reason": "Tokyo transit contactless smart card containing electric sensor coils.",
+    "sub_element": "Aether",
+    "rarity": "Epic",
+    "image_art_url": null,
+    "imagen_prompt": "A holographic glowing transit card speeding like a shuriken through a high-tech electronic gate corridor."
+  },
+  {
+    "card_name": "Boss Coffee Shogun",
+    "element": "Fire",
+    "base_stats": {
+      "health": 100,
+      "attack": 80,
+      "speed": 70
+    },
+    "ability_name": "Caffeine Overdrive",
+    "effect_type": "boost_attack",
+    "value": 30,
+    "lore": "Brewed in the heart of Tokyo's vending machines. Contains enough raw alchemical energy to power a developer through a 48-hour hackathon.",
+    "image_url": "/uploads/1d604a76-09e9-44a1-a48b-459c4f935bc7.jpg",
+    "uniqueness_score": 97,
+    "uniqueness_reason": "\u2728 [Daily Quest Bonus!] Branded canned coffee widely found in Tokyo vending machines.",
+    "sub_element": "Plasma",
+    "rarity": "Rare",
+    "image_art_url": null,
+    "imagen_prompt": "A glowing can of canned coffee surrounded by a samurai energy aura on a dark cyberpunk Tokyo alley."
+  },
+  {
+    "card_name": "Boss Coffee Shogun",
+    "element": "Fire",
+    "base_stats": {
+      "health": 100,
+      "attack": 80,
+      "speed": 70
+    },
+    "ability_name": "Caffeine Overdrive",
+    "effect_type": "boost_attack",
+    "value": 30,
+    "lore": "Brewed in the heart of Tokyo's vending machines. Contains enough raw alchemical energy to power a developer through a 48-hour hackathon.",
+    "image_url": "/uploads/ed04081c-caca-4d8d-a688-094db8641f6d.jpg",
+    "uniqueness_score": 97,
+    "uniqueness_reason": "\u2728 [Daily Quest Bonus!] Branded canned coffee widely found in Tokyo vending machines.",
+    "sub_element": "Plasma",
+    "rarity": "Rare",
+    "image_art_url": null,
+    "imagen_prompt": "A glowing can of canned coffee surrounded by a samurai energy aura on a dark cyberpunk Tokyo alley."
+  },
+  {
+    "card_name": "Suica Ninja",
+    "element": "Lightning",
+    "base_stats": {
+      "health": 70,
+      "attack": 60,
+      "speed": 120
+    },
+    "ability_name": "Gate Rush",
+    "effect_type": "boost_speed",
+    "value": 25,
+    "lore": "A sleek alchemical slate that grants lightning-fast travel through the Tokyo transit grid. Beeps with raw lightning power.",
+    "image_url": "/uploads/49e8ec8f-6f95-4dd6-acd6-cd1cc9181437.jpg",
+    "uniqueness_score": 75,
+    "uniqueness_reason": "Tokyo transit contactless smart card containing electric sensor coils.",
+    "sub_element": "Aether",
+    "rarity": "Epic",
+    "image_art_url": null,
+    "imagen_prompt": "A holographic glowing transit card speeding like a shuriken through a high-tech electronic gate corridor."
+  },
+  {
+    "card_name": "Boss Coffee Shogun",
+    "element": "Fire",
+    "base_stats": {
+      "health": 100,
+      "attack": 80,
+      "speed": 70
+    },
+    "ability_name": "Caffeine Overdrive",
+    "effect_type": "boost_attack",
+    "value": 30,
+    "lore": "Brewed in the heart of Tokyo's vending machines. Contains enough raw alchemical energy to power a developer through a 48-hour hackathon.",
+    "image_url": "/uploads/67e5cd83-1c6c-443e-b37f-91693b528b02.jpg",
+    "uniqueness_score": 97,
+    "uniqueness_reason": "\u2728 [Daily Quest Bonus!] Branded canned coffee widely found in Tokyo vending machines.",
+    "sub_element": "Plasma",
+    "rarity": "Rare",
+    "image_art_url": null,
+    "imagen_prompt": "A glowing can of canned coffee surrounded by a samurai energy aura on a dark cyberpunk Tokyo alley."
   }
 ]

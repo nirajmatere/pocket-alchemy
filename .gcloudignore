@@ -1,0 +1,20 @@
+# This file specifies files that should not be uploaded to Google Cloud Build.
+.git/
+node_modules/
+frontend/node_modules/
+test_env/
+venv/
+.venv/
+backend/.env
+backend/gcp-key.json
+backend/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.vite/
+battle_history.json
+player_profile.json
+uniqueness_leaderboard.json
+cards_inventory.json
+**/uploads/*

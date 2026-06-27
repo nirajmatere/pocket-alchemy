@@ -44,6 +44,27 @@ from backend.battle import BattleSession, CAMPAIGN_BOSSES
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("main")
 
+# --- Managed Agents Helper ---
+
+def get_or_create_agent(client, agent_id: str, system_instruction: str, base_agent: str = "antigravity-preview-05-2026"):
+    try:
+        agent = client.agents.get(id=agent_id)
+        logger.info(f"Managed Agent {agent_id} already exists.")
+        return agent
+    except Exception:
+        try:
+            logger.info(f"Managed Agent {agent_id} not found. Creating a new one...")
+            agent = client.agents.create(
+                id=agent_id,
+                base_agent=base_agent,
+                system_instruction=system_instruction
+            )
+            logger.info(f"Successfully created Managed Agent {agent_id}.")
+            return agent
+        except Exception as e:
+            logger.warning(f"Failed to create Managed Agent {agent_id}: {e}. Will use direct prompt interaction fallback.")
+            return None
+
 app = FastAPI(title="Pocket Alchemy Backend")
 
 # Enable CORS for frontend requests
@@ -698,20 +719,55 @@ async def battle_agent_play(request: AgentPlayRequest):
             client = genai.Client(api_key=api_key)
         else:
             raise HTTPException(status_code=500, detail="Neither GCP_PROJECT_ID nor GEMINI_API_KEY is configured.")
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=GeminiAgentDecision,
-                temperature=0.1
+            
+        # Try utilizing the Managed Agents API
+        try:
+            agent_id = "combat-tactician-agent"
+            get_or_create_agent(
+                client, 
+                agent_id=agent_id,
+                system_instruction=(
+                    "You are a tactical combat agent that makes battle decisions for a trading card game. "
+                    "You evaluate stats, cooldowns, stances, and element matchups to select the optimal move. "
+                    "You must output ONLY a JSON object matching the requested schema. Do not output markdown code blocks."
+                )
             )
-        )
-        
-        decision = GeminiAgentDecision.model_validate_json(response.text)
-        action = decision.action.lower()
-        stance = decision.stance.lower()
-        reasoning = decision.reasoning
+            
+            logger.info(f"Invoking Managed Agent {agent_id} for combat decision...")
+            interaction = client.interactions.create(
+                agent=agent_id,
+                input=prompt,
+                environment="remote"
+            )
+            raw_text = interaction.output_text
+            
+            # Clean text if wrapped in ```json or ```
+            if "```json" in raw_text:
+                raw_text = raw_text.split("```json")[1].split("```")[0].strip()
+            elif "```" in raw_text:
+                raw_text = raw_text.split("```")[1].split("```")[0].strip()
+            else:
+                raw_text = raw_text.strip()
+                
+            decision = GeminiAgentDecision.model_validate_json(raw_text)
+            action = decision.action.lower()
+            stance = decision.stance.lower()
+            reasoning = decision.reasoning
+        except Exception as agent_err:
+            logger.warning(f"Managed Agents API failed: {agent_err}. Falling back to standard generate_content.")
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=GeminiAgentDecision,
+                    temperature=0.1
+                )
+            )
+            decision = GeminiAgentDecision.model_validate_json(response.text)
+            action = decision.action.lower()
+            stance = decision.stance.lower()
+            reasoning = decision.reasoning
         
         # Double check constraints (fallback logic)
         if action not in ["attack", "ability"]:
@@ -756,6 +812,91 @@ async def battle_agent_play(request: AgentPlayRequest):
         "stance": stance,
         "reasoning": reasoning
     }
+
+class AdvisorChatRequest(BaseModel):
+    client_id: str
+    message: str
+    chat_history: List[Dict[str, str]] = []
+
+@app.post("/api/advisor/chat")
+async def advisor_chat(request: AdvisorChatRequest):
+    """Chat with the Managed Alchemical Sage Agent to get deck advice and fusion strategies."""
+    project_id = os.environ.get("GCP_PROJECT_ID")
+    location = os.environ.get("GCP_LOCATION", "asia-northeast1")
+    api_key = os.environ.get("GEMINI_API_KEY")
+    
+    # Load user's cards to provide as context to the agent
+    inventory = db_client.get_inventory(request.client_id)
+    cards_summary = []
+    for c in inventory:
+        cards_summary.append(
+            f"- {c['card_name']} (Element: {c['element']}, Sub: {c.get('sub_element', 'Aether')}, HP: {c['base_stats']['health']}, ATK: {c['base_stats']['attack']}, SPD: {c['base_stats']['speed']}, Ability: {c['ability_name']}, Lore: {c['lore']})"
+        )
+    cards_context = "\n".join(cards_summary) if cards_summary else "No cards forged yet."
+    
+    system_instruction = (
+        "You are the Alchemical Sage, an ancient master of deck building, combat strategy, and lore in the game 'Pocket Alchemy'.\n"
+        "Your role is to guide players to optimize their decks, suggest which cards to fuse, explain battle strategy, and recount alchemical lore.\n\n"
+        "Here is the player's current card inventory:\n"
+        f"{cards_context}\n\n"
+        "Guidelines:\n"
+        "1. Be wise, slightly mysterious, and encouraging, like a high-tech cyberpunk alchemist mentor.\n"
+        "2. When suggesting fusions, recommend two specific cards from their inventory and explain what powerful hybrid would emerge (e.g., combining Fire and Water for Steam/Vapor, or Lightning and Earth for Quartz).\n"
+        "3. Keep responses relatively concise but filled with thematic alchemical terms."
+    )
+    
+    try:
+        from google import genai
+        from google.genai import types
+        
+        if project_id:
+            client = genai.Client(vertexai=True, project=project_id, location=location)
+        elif api_key:
+            client = genai.Client(api_key=api_key)
+        else:
+            raise HTTPException(status_code=500, detail="Neither GCP_PROJECT_ID nor GEMINI_API_KEY is configured.")
+            
+        # Try utilizing the Managed Agents API
+        try:
+            agent_id = "alchemical-sage-advisor"
+            get_or_create_agent(
+                client,
+                agent_id=agent_id,
+                system_instruction=system_instruction
+            )
+            
+            logger.info(f"Invoking Managed Agent {agent_id} for advisor chat...")
+            interaction = client.interactions.create(
+                agent=agent_id,
+                input=request.message,
+                environment="remote"
+            )
+            response_text = interaction.output_text
+            
+        except Exception as agent_err:
+            logger.warning(f"Managed Agents API failed: {agent_err}. Falling back to standard generate_content.")
+            # Fallback to standard generate_content using gemini-2.5-flash
+            messages = [
+                types.Content(role="user", parts=[types.Part.from_text(text=f"System Instruction: {system_instruction}")]),
+                types.Content(role="model", parts=[types.Part.from_text(text="I am ready to advise you, apprentice.")])
+            ]
+            for h in request.chat_history:
+                messages.append(types.Content(
+                    role="user" if h["role"] == "user" else "model",
+                    parts=[types.Part.from_text(text=h["text"])]
+                ))
+            messages.append(types.Content(role="user", parts=[types.Part.from_text(text=request.message)]))
+            
+            resp = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=messages
+            )
+            response_text = resp.text
+            
+        return {"response": response_text}
+    except Exception as e:
+        logger.error(f"Advisor Chat failed: {e}")
+        return {"response": "The alchemical channels are unstable at the moment. Try again later, apprentice."}
 
 @app.post("/api/battle/create")
 def create_battle(request: BattleCreateRequest):

@@ -76,6 +76,15 @@ const resolveImageUrl = (cardOrFighter) => {
   }
   return `${API_BASE}${url}`;
 };
+
+const playCardVoice = (card) => {
+  if (!card || !card.audio_url) return;
+  const url = card.audio_url.startsWith('http://') || card.audio_url.startsWith('https://')
+    ? card.audio_url
+    : `${API_BASE}${card.audio_url}`;
+  const audio = new Audio(url);
+  audio.play().catch(e => console.error("Audio playback blocked or failed:", e));
+};
 const SPARKS = [
   { left: '25%', delay: '0.2s', duration: '3.5s' },
   { left: '42%', delay: '1.5s', duration: '4.2s' },
@@ -151,6 +160,46 @@ export default function App() {
   const [leaderboard, setLeaderboard] = useState([]);
   const [dailyQuest, setDailyQuest] = useState(null);
   const [battleHistory, setBattleHistory] = useState([]);
+
+  // Alchemical Sage Advisor Chat States
+  const [advisorHistory, setAdvisorHistory] = useState([
+    { role: 'model', text: 'Greetings, apprentice. I am the Alchemical Sage, master of transmutations and tactical combat. Ask me how to combine your current inventory or optimize your battle stances.' }
+  ]);
+  const [advisorInput, setAdvisorInput] = useState('');
+  const [advisorLoading, setAdvisorLoading] = useState(false);
+
+  const sendAdvisorMessage = async (customMessage = null) => {
+    const textToSend = customMessage || advisorInput;
+    if (!textToSend.trim() || advisorLoading) return;
+    
+    const userMsg = { role: 'user', text: textToSend };
+    setAdvisorHistory(prev => [...prev, userMsg]);
+    if (!customMessage) setAdvisorInput('');
+    setAdvisorLoading(true);
+    
+    try {
+      const res = await fetch(`${API_BASE}/api/advisor/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_id: clientId,
+          message: textToSend,
+          chat_history: advisorHistory.slice(1).map(h => ({ role: h.role, text: h.text }))
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAdvisorHistory(prev => [...prev, { role: 'model', text: data.response }]);
+      } else {
+        setAdvisorHistory(prev => [...prev, { role: 'model', text: 'Alchemical communications were disrupted. Please retry.' }]);
+      }
+    } catch (e) {
+      console.error(e);
+      setAdvisorHistory(prev => [...prev, { role: 'model', text: 'Failed to establish connection with the Sage.' }]);
+    } finally {
+      setAdvisorLoading(false);
+    }
+  };
 
   // Feed and custom duel setup states
   const [todayFeed, setTodayFeed] = useState([]);
@@ -433,7 +482,7 @@ export default function App() {
   // Control HTML5 camera streaming
   useEffect(() => {
     let timerId = setTimeout(() => {
-      if (activeView === 'transmute') {
+      if (activeView === 'transmute' && !isUploading) {
         startCamera();
       } else {
         stopCamera();
@@ -444,7 +493,7 @@ export default function App() {
       stopCamera();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeView]);
+  }, [activeView, isUploading]);
 
   // Reset action locks when a new round starts
   useEffect(() => {
@@ -572,6 +621,9 @@ export default function App() {
         setCards(prev => [card, ...prev]);
         setStatusMessage('Alchemical transmutation successful!');
         fetchDashboardData();
+        if (card.audio_url) {
+          setTimeout(() => playCardVoice(card), 1000);
+        }
       } else {
         setStatusMessage('Transmutation failed. Check Gemini API configurations.');
       }
@@ -1036,7 +1088,8 @@ export default function App() {
                 { view: 'leaderboard', label: '3. LEADERBOARD', color: 'border-cyber-green/20 hover:border-cyber-green/40 hover:text-slate-200', activeColor: 'bg-cyber-green text-black border-cyber-green shadow-[0_0_10px_rgba(57,255,20,0.4)]' },
                 { view: 'badges', label: '4. BADGES VAULT', color: 'border-cyber-pink/20 hover:border-cyber-pink/40 hover:text-slate-200', activeColor: 'bg-cyber-pink text-black border-cyber-pink shadow-[0_0_10px_rgba(255,0,127,0.4)]' },
                 { view: 'feed', label: '5. TODAY\'S FEED', color: 'border-cyber-yellow/20 hover:border-cyber-yellow/40 hover:text-slate-200', activeColor: 'bg-cyber-yellow text-black border-cyber-yellow shadow-[0_0_10px_rgba(255,251,0,0.4)]' },
-                { view: 'lobby_select', label: '6. PVP ROOMS', color: 'border-cyber-blue/20 hover:border-cyber-blue/40 hover:text-slate-200', activeColor: 'bg-cyber-blue text-black border-cyber-blue shadow-[0_0_10px_rgba(0,240,255,0.4)]' }
+                { view: 'lobby_select', label: '6. PVP ROOMS', color: 'border-cyber-blue/20 hover:border-cyber-blue/40 hover:text-slate-200', activeColor: 'bg-cyber-blue text-black border-cyber-blue shadow-[0_0_10px_rgba(0,240,255,0.4)]' },
+                { view: 'advisor', label: '7. ALCHEMICAL SAGE', color: 'border-cyber-purple/20 hover:border-cyber-purple/40 hover:text-slate-200', activeColor: 'bg-cyber-purple text-black border-cyber-purple shadow-[0_0_10px_rgba(157,78,221,0.4)]' }
               ].map((tab) => (
                 <button
                   key={tab.view}
@@ -1045,6 +1098,7 @@ export default function App() {
                       setActiveView(tab.view);
                       if (tab.view === 'inventory') fetchInventory();
                       else if (tab.view === 'feed') fetchTodayFeed();
+                      else if (tab.view === 'advisor') fetchInventory();
                       else fetchDashboardData();
                     }
                   }}
@@ -1173,33 +1227,36 @@ export default function App() {
                 </div>
               ) : (
                 // LIVE HTML5 VIDEO VIEWPORT
-                <div className="w-full h-full flex flex-col items-center justify-between relative">
-                  {/* Glowing camera border reticle */}
-                  <div className="absolute inset-4 border border-white/10 rounded-xl pointer-events-none z-10">
-                    <div className="absolute top-0 left-0 w-4 h-4 border-t border-l border-cyber-blue" />
-                    <div className="absolute top-0 right-0 w-4 h-4 border-t border-r border-cyber-blue" />
-                    <div className="absolute bottom-0 left-0 w-4 h-4 border-b border-l border-cyber-blue" />
-                    <div className="absolute bottom-0 right-0 w-4 h-4 border-b border-r border-cyber-blue" />
-                  </div>
+                <div className="flex flex-col items-center justify-center relative z-10 w-full py-4">
+                  {/* Viewfinder at 1.6x dimensions (w-[410px] h-[282px]) with absolute shutter overlay */}
+                  <div className="w-[410px] h-[282px] max-w-full flex flex-col items-center justify-center relative rounded-xl border border-cyber-blue/40 bg-black overflow-hidden shadow-[0_0_15px_rgba(0,240,255,0.2)]">
+                    {/* Glowing camera border reticle */}
+                    <div className="absolute inset-3 border border-white/10 rounded-lg pointer-events-none z-10">
+                      <div className="absolute top-0 left-0 w-3 h-3 border-t border-l border-cyber-blue" />
+                      <div className="absolute top-0 right-0 w-3 h-3 border-t border-r border-cyber-blue" />
+                      <div className="absolute bottom-0 left-0 w-3 h-3 border-b border-l border-cyber-blue" />
+                      <div className="absolute bottom-0 right-0 w-3 h-3 border-b border-r border-cyber-blue" />
+                    </div>
 
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    className="w-full h-full object-cover rounded-xl bg-black"
-                  />
-                  <canvas ref={canvasRef} className="hidden" />
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className="w-full h-full object-cover rounded-lg bg-black"
+                    />
+                    <canvas ref={canvasRef} className="hidden" />
 
-                  {/* Shutter capture controls */}
-                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20">
-                    <button
-                      onClick={captureFrameAndTransmute}
-                      disabled={isUploading}
-                      className="w-16 h-16 rounded-full bg-white/20 hover:bg-white/40 border-4 border-white flex items-center justify-center transition-all cursor-pointer shadow-[0_0_15px_rgba(255,255,255,0.4)] hover:scale-105 active:scale-95 disabled:opacity-40"
-                    >
-                      <div className="w-10 h-10 rounded-full bg-cyber-purple animate-pulse" />
-                    </button>
+                    {/* Shutter capture button overlay */}
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20">
+                      <button
+                        onClick={captureFrameAndTransmute}
+                        disabled={isUploading}
+                        className="w-14 h-14 rounded-full bg-white/20 hover:bg-white/40 border-4 border-white flex items-center justify-center transition-all cursor-pointer shadow-[0_0_15px_rgba(255,255,255,0.3)] hover:scale-105 active:scale-95 disabled:opacity-40"
+                      >
+                        <div className="w-8 h-8 rounded-full bg-cyber-purple animate-pulse" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1284,6 +1341,130 @@ export default function App() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* VIEW 6.5: ALCHEMICAL SAGE ADVISOR CHAT */}
+      {activeView === 'advisor' && (
+        <div className="flex-1 flex flex-col lg:flex-row gap-6 items-stretch">
+          {/* Chat Panel */}
+          <div className="flex-1 flex flex-col cyber-glass border border-white/10 rounded-2xl p-5 bg-black/40 min-h-[500px]">
+            <div className="flex items-center justify-between pb-3 border-b border-white/5 mb-4">
+              <h2 className="text-base font-bold font-mono text-cyber-purple uppercase tracking-wider flex items-center gap-2">
+                <span>🧙‍♂️</span> Alchemical Sage Advisor
+              </h2>
+              <span className="text-[10px] font-mono text-slate-400 bg-slate-900 border border-white/5 px-2 py-0.5 rounded">
+                MANAGED AGENT V2.6
+              </span>
+            </div>
+
+            {/* Chat History */}
+            <div className="flex-1 overflow-y-auto space-y-4 pr-2 max-h-[380px] min-h-[300px]">
+              {advisorHistory.map((msg, idx) => (
+                <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[85%] rounded-xl p-3 font-mono text-xs leading-relaxed ${
+                    msg.role === 'user'
+                      ? 'bg-cyber-purple/20 text-white border border-cyber-purple/30 rounded-tr-none'
+                      : 'bg-slate-950/80 text-cyber-green border border-white/5 rounded-tl-none'
+                  }`}>
+                    <span className="text-[9px] block text-slate-500 mb-1">
+                      {msg.role === 'user' ? 'APPRENTICE' : 'ALCHEMICAL SAGE'}
+                    </span>
+                    <p className="whitespace-pre-wrap">{msg.text}</p>
+                  </div>
+                </div>
+              ))}
+              {advisorLoading && (
+                <div className="flex justify-start">
+                  <div className="bg-slate-950/80 text-slate-500 border border-white/5 rounded-xl rounded-tl-none p-3 font-mono text-xs">
+                    <span className="text-[9px] block mb-1">ALCHEMICAL SAGE</span>
+                    <div className="flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 bg-cyber-green rounded-full animate-bounce" />
+                      <span className="w-1.5 h-1.5 bg-cyber-green rounded-full animate-bounce [animation-delay:0.2s]" />
+                      <span className="w-1.5 h-1.5 bg-cyber-green rounded-full animate-bounce [animation-delay:0.4s]" />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Quick Suggestions */}
+            <div className="mt-4 flex gap-2 overflow-x-auto pb-2 scrollbar-thin select-none">
+              {[
+                "Suggest a fusion recipe from my vault",
+                "Explain the element matchup chart",
+                "Give me combat stance advice",
+                "Tell me some ancient alchemical lore"
+              ].map((suggestion, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => sendAdvisorMessage(suggestion)}
+                  disabled={advisorLoading}
+                  className="flex-shrink-0 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-cyber-purple/10 border border-white/10 hover:border-cyber-purple/30 text-slate-300 hover:text-white font-mono text-[9px] uppercase transition-all"
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+
+            {/* Input Bar */}
+            <div className="mt-4 flex gap-2 border-t border-white/5 pt-4">
+              <input
+                type="text"
+                value={advisorInput}
+                onChange={(e) => setAdvisorInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && sendAdvisorMessage()}
+                disabled={advisorLoading}
+                placeholder="Ask the Sage for deck advice..."
+                className="flex-1 bg-black/60 border border-white/10 focus:border-cyber-purple rounded-lg px-3 py-2 font-mono text-xs text-white focus:outline-none focus:ring-1 focus:ring-cyber-purple"
+              />
+              <button
+                onClick={() => sendAdvisorMessage()}
+                disabled={advisorLoading}
+                className="px-4 py-2 rounded-lg bg-cyber-purple text-black font-mono font-bold text-xs uppercase hover:brightness-110 active:scale-95 transition-all cursor-pointer"
+              >
+                Send
+              </button>
+            </div>
+          </div>
+
+          {/* Sidebar: Card Overview */}
+          <div className="w-full lg:w-80 flex flex-col cyber-glass border border-white/10 rounded-2xl p-5 bg-black/40">
+            <h3 className="text-sm font-bold font-mono text-cyber-blue uppercase tracking-wider mb-3 pb-2 border-b border-white/5">
+              🔮 Deck Catalog ({cards.length})
+            </h3>
+            <div className="flex-1 overflow-y-auto space-y-3 pr-2 max-h-[380px] lg:max-h-none">
+              {cards.length === 0 ? (
+                <p className="text-xs font-mono text-slate-500 italic text-center py-8">No cards forged yet.</p>
+              ) : (
+                cards.map((card, idx) => (
+                  <div
+                    key={idx}
+                    onClick={() => {
+                      sendAdvisorMessage(`Analyze my card: ${card.card_name}`);
+                      playCardVoice(card);
+                    }}
+                    className="flex items-center gap-3 p-2 rounded-lg bg-white/5 border border-white/5 hover:border-cyber-blue/30 cursor-pointer transition-all select-none group"
+                  >
+                    <div className="w-10 h-10 rounded bg-black/60 overflow-hidden border border-white/5 flex-shrink-0">
+                      {resolveImageUrl(card) ? (
+                        <img src={resolveImageUrl(card)} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                      ) : (
+                        <div className="w-full h-full bg-slate-900 flex items-center justify-center text-[10px]">⚛</div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0 font-mono">
+                      <h4 className="text-[10px] font-bold text-white uppercase truncate">{card.card_name}</h4>
+                      <p className="text-[8px] text-slate-400 mt-0.5">{card.element.toUpperCase()} | HP:{card.base_stats.health}</p>
+                    </div>
+                    {card.audio_url && (
+                      <span className="text-xs opacity-60 group-hover:opacity-100 group-hover:text-cyber-purple transition-all">🔊</span>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         </div>
       )}
 
@@ -1553,7 +1734,7 @@ export default function App() {
                   <img
                     src={resolveImageUrl(me)}
                     alt={me.card_name}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-contain"
                   />
                 ) : (
                   <AlchemicalPlaceholder element={me.element} className="border-none bg-transparent" />
@@ -1716,7 +1897,7 @@ export default function App() {
                   <img
                     src={resolveImageUrl(opponent)}
                     alt={opponent.card_name}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-contain"
                   />
                 ) : (
                   <AlchemicalPlaceholder element={opponent.element} className="border-none bg-transparent" />
@@ -2842,7 +3023,21 @@ function TradingCard({ card, onAction, actionLabel }) {
 
       {/* Header Info */}
       <div className="card-rarity-row flex items-center justify-between border-b border-white/5 pb-2 relative z-10">
-        <span className="font-mono text-[9px] tracking-wider text-slate-400">ALCHEM_ASSET</span>
+        <div className="flex items-center gap-1.5">
+          <span className="font-mono text-[9px] tracking-wider text-slate-400">ALCHEM_ASSET</span>
+          {card.audio_url && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                playCardVoice(card);
+              }}
+              className="text-[10px] text-cyber-purple hover:text-white cursor-pointer transition-all animate-pulse"
+              title="Play battle cry"
+            >
+              🔊
+            </button>
+          )}
+        </div>
         <span className={`px-2 py-0.5 rounded-full border text-[8px] font-mono font-bold tracking-wider ${style.badge}`}>
           {card.element.toUpperCase()} {style.icon}
         </span>
@@ -2850,12 +3045,12 @@ function TradingCard({ card, onAction, actionLabel }) {
 
       {/* Card Visual & Name */}
       <div className="card-title-row my-2 relative z-10 flex flex-col gap-2">
-        <div className="card-img-frame w-full h-32 rounded-lg bg-black/70 flex items-center justify-center overflow-hidden border border-white/5 relative">
+        <div className="card-img-frame w-full h-44 rounded-lg bg-black/70 flex items-center justify-center overflow-hidden border border-white/5 relative">
           {resolveImageUrl(card) ? (
             <img
               src={resolveImageUrl(card)}
               alt={card.card_name}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
             />
           ) : (
             <AlchemicalPlaceholder element={card.element} className="border-none bg-transparent" />

@@ -50,6 +50,7 @@ class GameCard(BaseModel):
     image_art_url: str | None = None
     imagen_prompt: str | None = Field(default=None, description="Detailed alchemical/fantasy/cyberpunk art prompt (1-2 sentences) representing the object.")
     created_date: str | None = None
+    audio_url: str | None = None
 
 # --- Pre-baked fallback cards for offline / missing API key mode ---
 
@@ -183,6 +184,16 @@ def balance_stats(stats: CardStats, target_sum: int = 250) -> CardStats:
         
     return CardStats(health=h_adj, attack=a_adj, speed=s_adj)
 
+# --- WAV Helper Function ---
+
+def save_pcm_as_wav(filename: str, pcm_bytes: bytes, channels: int = 1, rate: int = 24000, sample_width: int = 2):
+    import wave
+    with wave.open(filename, "wb") as wf:
+        wf.setnchannels(channels)
+        wf.setsampwidth(sample_width)
+        wf.setframerate(rate)
+        wf.writeframes(pcm_bytes)
+
 # --- Primary Transmutation Function ---
 
 async def transmute_image_to_card(image_bytes: bytes, filename: str, mime_type: str = "image/jpeg") -> GameCard:
@@ -239,9 +250,12 @@ async def transmute_image_to_card(image_bytes: bytes, filename: str, mime_type: 
             "Provide a brief, creative uniqueness_reason.\n"
             "5. Sub-Element: Assign a sub-element based on the object's specifics. One of: Plasma, Frost, Quartz, Vapor, Aether.\n"
             "6. Rarity: Assign a rarity tier based on the uniqueness score. Common (<40), Rare (40-69), Epic (70-89), Legendary (90+).\n"
-            "7. Imagen Prompt: Write a detailed alchemical/fantasy/cyberpunk art generation prompt (1-2 sentences) "
-            "describing a stylized representation of the object as a magical trading card creature/relic, including a vibrant matching background. "
-            "Keep the description creative, artistic, and clear for a text-to-image generator (e.g., 'A mystical glowing blue energy drink can pulsing with lightning sparks, floating in a cyberpunk neo-Tokyo street, anime fantasy trading card style').\n"
+            "7. Imagen Prompt: Write a detailed, highly specific art generation prompt representing the object. "
+            "To ensure the generated artwork is extremely faithful to the captured image, you MUST describe the main subject/object in the center "
+            "almost exactly as it appears in the photo, keeping its design, shape, colors, and structure highly recognizable. "
+            "Apply a creative 'AI twist' to this central object by adding subtle futuristic or magical elements onto it (e.g. glowing energy veins, "
+            "holographic highlights, or soft alchemical sparks), and replace the background with a stylized, dynamic alchemical or cyberpunk backdrop, "
+            "so the final image is a recognizable but magical version of the captured object.\n"
             "8. Output format: You must return a single JSON object matching the requested schema. No conversational wrapper."
         )
 
@@ -309,7 +323,7 @@ async def transmute_image_to_card(image_bytes: bytes, filename: str, mime_type: 
                 if img_res.generated_images:
                     gen_img = img_res.generated_images[0]
                     if hasattr(gen_img, 'image') and gen_img.image:
-                        gen_img.image.save(art_filepath, format="JPEG")
+                        gen_img.image.save(art_filepath)
                         card.image_art_url = f"/uploads/{art_filename}"
                         logger.info(f"Saved Imagen 3 artwork to {art_filepath}")
                     elif hasattr(gen_img, 'image_bytes') and gen_img.image_bytes:
@@ -319,6 +333,64 @@ async def transmute_image_to_card(image_bytes: bytes, filename: str, mime_type: 
                         logger.info(f"Saved Imagen 3 artwork (bytes) to {art_filepath}")
             except Exception as img_err:
                 logger.error(f"Imagen 3 Art Generation failed: {img_err}. Continuing with raw photo only.")
+
+        # --- Gemini Audio Voice-Line Generation ---
+        try:
+            logger.info(f"Generating audio voice line for card: {card.card_name}")
+            voice_prompt = (
+                f"You are the newly transmuted card '{card.card_name}' in Pocket Alchemy.\n"
+                f"Your element is '{card.element}' and your lore is: '{card.lore}'.\n"
+                f"Speak a very short, epic, and dramatic battle cry or voice line representing your alchemical nature. "
+                f"Maximum 6 words. Speak clearly and with high impact."
+            )
+            
+            voice_name = "Charon"
+            elem_lower = card.element.lower()
+            if "fire" in elem_lower:
+                voice_name = "Fenrir"
+            elif "water" in elem_lower:
+                voice_name = "Kore"
+            elif "lightning" in elem_lower:
+                voice_name = "Puck"
+            elif "earth" in elem_lower:
+                voice_name = "Aoede"
+            
+            # Using Gemini 2.5 Flash to generate audio output
+            audio_response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=voice_prompt,
+                config=types.GenerateContentConfig(
+                    response_modalities=["AUDIO"],
+                    speech_config=types.SpeechConfig(
+                        voice_config=types.VoiceConfig(
+                            prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                                voice_name=voice_name
+                            )
+                        )
+                    )
+                )
+            )
+            
+            parts = audio_response.candidates[0].content.parts
+            audio_part = next((p for p in parts if p.inline_data), None)
+            if audio_part:
+                audio_data = audio_part.inline_data.data
+                if isinstance(audio_data, str):
+                    import base64
+                    try:
+                        audio_data = base64.b64decode(audio_data)
+                    except Exception:
+                        pass
+                
+                audio_filename = f"voice_{os.path.splitext(filename)[0]}.wav"
+                uploads_dir = os.path.join(os.path.dirname(__file__), "uploads")
+                audio_filepath = os.path.join(uploads_dir, audio_filename)
+                
+                save_pcm_as_wav(audio_filepath, audio_data)
+                card.audio_url = f"/uploads/{audio_filename}"
+                logger.info(f"Saved audio voice line to {audio_filepath}")
+        except Exception as audio_err:
+            logger.error(f"Audio generation failed: {audio_err}. Continuing without audio.")
 
         logger.info(f"Successfully transmuted card: {card.card_name} (Uniqueness: {card.uniqueness_score})")
         return card
@@ -458,7 +530,7 @@ async def fuse_cards(card1: GameCard, card2: GameCard, filename_seed: str) -> Ga
                 if img_res.generated_images:
                     gen_img = img_res.generated_images[0]
                     if hasattr(gen_img, 'image') and gen_img.image:
-                        gen_img.image.save(art_filepath, format="JPEG")
+                        gen_img.image.save(art_filepath)
                         fused_card.image_art_url = f"/uploads/{art_filename}"
                         logger.info(f"Saved fused Imagen 3 artwork to {art_filepath}")
                     elif hasattr(gen_img, 'image_bytes') and gen_img.image_bytes:
@@ -470,6 +542,64 @@ async def fuse_cards(card1: GameCard, card2: GameCard, filename_seed: str) -> Ga
                 logger.error(f"Imagen 3 Fused Art Generation failed: {img_err}. Falling back.")
                 fused_card.image_art_url = card1.image_art_url if card1.image_art_url else card2.image_art_url
                 
+        # --- Gemini Audio Voice-Line Generation for Fusion ---
+        try:
+            logger.info(f"Generating audio voice line for fused card: {fused_card.card_name}")
+            voice_prompt = (
+                f"You are the newly synthesized hybrid card '{fused_card.card_name}' in Pocket Alchemy, "
+                f"fused from '{card1.card_name}' and '{card2.card_name}'.\n"
+                f"Your element is '{fused_card.element}' and your lore is: '{fused_card.lore}'.\n"
+                f"Speak a very short, epic, and dramatic fused battle cry or voice line. "
+                f"Maximum 6 words. Speak clearly and with high impact."
+            )
+            
+            voice_name = "Charon"
+            elem_lower = fused_card.element.lower()
+            if "fire" in elem_lower:
+                voice_name = "Fenrir"
+            elif "water" in elem_lower:
+                voice_name = "Kore"
+            elif "lightning" in elem_lower:
+                voice_name = "Puck"
+            elif "earth" in elem_lower:
+                voice_name = "Aoede"
+                
+            audio_response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=voice_prompt,
+                config=types.GenerateContentConfig(
+                    response_modalities=["AUDIO"],
+                    speech_config=types.SpeechConfig(
+                        voice_config=types.VoiceConfig(
+                            prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                                voice_name=voice_name
+                            )
+                        )
+                    )
+                )
+            )
+            
+            parts = audio_response.candidates[0].content.parts
+            audio_part = next((p for p in parts if p.inline_data), None)
+            if audio_part:
+                audio_data = audio_part.inline_data.data
+                if isinstance(audio_data, str):
+                    import base64
+                    try:
+                        audio_data = base64.b64decode(audio_data)
+                    except Exception:
+                        pass
+                
+                audio_filename = f"voice_fuse_{filename_seed}.wav"
+                uploads_dir = os.path.join(os.path.dirname(__file__), "uploads")
+                audio_filepath = os.path.join(uploads_dir, audio_filename)
+                
+                save_pcm_as_wav(audio_filepath, audio_data)
+                fused_card.audio_url = f"/uploads/{audio_filename}"
+                logger.info(f"Saved fused audio voice line to {audio_filepath}")
+        except Exception as audio_err:
+            logger.error(f"Fused Audio generation failed: {audio_err}. Continuing without audio.")
+
         return fused_card
         
     except Exception as e:

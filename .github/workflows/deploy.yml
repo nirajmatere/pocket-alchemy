@@ -97,3 +97,8 @@ jobs:
           image: gcr.io/${{ secrets.GCP_PROJECT_ID }}/pocket-alchemy-backend:${{ github.sha }}
           region: asia-northeast1
           flags: --allow-unauthenticated
+          env_vars: |
+            GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+            GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
+            GCS_BUCKET_NAME=${{ secrets.GCP_PROJECT_ID }}
+            GCP_LOCATION=asia-northeast1

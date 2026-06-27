@@ -1,7 +1,7 @@
 /* eslint-disable no-unused-vars */
 import { useState, useEffect, useRef } from 'react';
 
-const HOST_IP = 'https://pocket-alchemy-backend-665383661867.asia-northeast1.run.app'; // Live backend URL
+const HOST_IP = 'https://pocket-alchemy-backend-440102621899.asia-northeast1.run.app'; // Live backend URL
 
 const getHostIp = () => {
   return localStorage.getItem('pocket_alchemy_backend_ip') || HOST_IP;
@@ -1810,6 +1810,36 @@ export default function App() {
                   </div>
                 </div>
               </div>
+
+              {/* Managed Agent Play Button */}
+              <button
+                disabled={battleState.game_over || actionLocked}
+                onClick={async () => {
+                  setActionLocked(true);
+                  try {
+                    const res = await fetch(`${API_BASE}/api/battle/agent_play`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ client_id: clientId, lobby_id: lobbyId })
+                    });
+                    if (res.ok) {
+                      const data = await res.json();
+                      setSelectedStance(data.stance);
+                    } else {
+                      const errData = await res.json();
+                      alert(errData.detail || "Managed Agent failed to deploy.");
+                      setActionLocked(false);
+                    }
+                  } catch (e) {
+                    console.error("Managed Agent deployment error:", e);
+                    alert("Failed to communicate with Managed Agent server.");
+                    setActionLocked(false);
+                  }
+                }}
+                className="py-2.5 rounded-lg bg-cyber-pink/20 hover:bg-cyber-pink/30 text-cyber-pink font-bold font-mono text-xs uppercase border border-cyber-pink/40 disabled:opacity-30 cursor-pointer text-center mt-2 flex items-center justify-center gap-1.5 shadow-[0_0_10px_rgba(255,0,127,0.15)] hover:shadow-[0_0_15px_rgba(255,0,127,0.3)] transition-all"
+              >
+                🤖 Deploy Managed Agent (AI Play)
+              </button>
             </div>
           ) : (
             <div className="bg-cyber-blue/15 border border-cyber-blue/30 rounded-lg py-2 text-center text-[10px] font-mono text-cyber-blue uppercase tracking-wider animate-pulse">

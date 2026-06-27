@@ -10,7 +10,7 @@ import hashlib
 from fastapi import FastAPI, UploadFile, File, Form, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Dict, List, Any
 
 # Load environment variables from .env if present
@@ -585,13 +585,22 @@ async def get_battle_hint(request: HintRequest):
     )
     
     try:
-        import google.generativeai as genai
+        from google import genai
+        project_id = os.environ.get("GCP_PROJECT_ID")
+        location = os.environ.get("GCP_LOCATION", "asia-northeast1")
         api_key = os.environ.get("GEMINI_API_KEY")
-        if not api_key:
-            raise HTTPException(status_code=500, detail="Gemini API key not configured.")
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-2.0-flash")
-        response = model.generate_content(hint_prompt)
+        
+        if project_id:
+            client = genai.Client(vertexai=True, project=project_id, location=location)
+        elif api_key:
+            client = genai.Client(api_key=api_key)
+        else:
+            raise HTTPException(status_code=500, detail="Neither GCP_PROJECT_ID nor GEMINI_API_KEY is configured.")
+            
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=hint_prompt
+        )
         hint_text = response.text.strip()
     except HTTPException:
         raise
@@ -610,6 +619,143 @@ async def get_battle_hint(request: HintRequest):
     db_client.update_profile(request.client_id, profile)
     
     return {"hint": hint_text, "remaining_dust": profile["aether_dust"]}
+
+class AgentPlayRequest(BaseModel):
+    client_id: str
+    lobby_id: str
+
+class GeminiAgentDecision(BaseModel):
+    action: str = Field(description="Combat move: 'attack' or 'ability'. Must choose 'attack' if my_ability_cooldown > 0.")
+    stance: str = Field(description="Tactical stance: 'aggressive', 'defensive', or 'focused'.")
+    reasoning: str = Field(description="A short, tactical description of why this choice was made (max 15 words).")
+
+@app.post("/api/battle/agent_play")
+async def battle_agent_play(request: AgentPlayRequest):
+    """Deploys a Gemini-powered Managed Battle Agent to choose the best stance and action."""
+    session = battle_sessions.get(request.lobby_id)
+    if not session or not session.player1 or not session.player2:
+        raise HTTPException(status_code=404, detail="No active battle found.")
+    
+    # Identify player index
+    if session.is_pvp:
+        if request.client_id == session.player1_id:
+            me = session.player1
+            opp = session.player2
+            my_id = session.player1_id
+        elif request.client_id == session.player2_id:
+            me = session.player2
+            opp = session.player1
+            my_id = session.player2_id
+        else:
+            raise HTTPException(status_code=400, detail="Client is not a participant in this PvP match.")
+    else:
+        # Solo / Campaign matches
+        me = session.player1
+        opp = session.player2
+        my_id = request.client_id
+
+    # Construct prompt
+    prompt = (
+        f"You are the Managed Battle Agent for {me.card.card_name} in an alchemical card battler.\n"
+        f"Analyze the current state and choose the absolute best tactical action and stance.\n\n"
+        f"MY STATE:\n"
+        f"- Name: {me.card.card_name}\n"
+        f"- Element: {me.card.element} (Sub: {me.card.sub_element})\n"
+        f"- Health: {me.current_health}/{me.max_health}\n"
+        f"- ATK: {me.attack + me.attack_buff}\n"
+        f"- SPD: {me.speed + me.speed_buff}\n"
+        f"- Special Ability: {me.card.ability_name} (Effect: {me.card.effect_type}, Power: {me.card.value})\n"
+        f"- Ability Cooldown: {me.ability_cooldown} rounds (Can only use 'ability' if cooldown is 0)\n"
+        f"- Shield Active: {me.shield_active}\n"
+        f"- Current Stance: {me.stance}\n\n"
+        f"OPPONENT STATE:\n"
+        f"- Name: {opp.card.card_name}\n"
+        f"- Element: {opp.card.element} (Sub: {opp.card.sub_element})\n"
+        f"- Health: {opp.current_health}/{opp.max_health}\n"
+        f"- ATK: {opp.attack + opp.attack_buff}\n"
+        f"- SPD: {opp.speed + opp.speed_buff}\n"
+        f"- Shield Active: {opp.shield_active}\n"
+        f"- Current Stance: {opp.stance}\n\n"
+        f"TACTICAL RULES:\n"
+        f"1. Element Matchups: Fire beats Earth, Earth beats Lightning, Lightning beats Water, Water beats Fire (1.5x damage). Inverse is 0.7x damage.\n"
+        f"2. Aggressive stance: Increases attack damage by 1.2x, but reduces speed by 0.9x.\n"
+        f"3. Defensive stance: Reduces incoming damage by flat 15 points, but reduces attack damage by 0.8x.\n"
+        f"4. Focused stance: Reduces special ability cooldown twice as fast (2 per turn) and increases speed by 1.25x.\n"
+        f"5. If my ability cooldown is > 0, you MUST select 'attack' as the action.\n\n"
+        f"Choose stance ('aggressive', 'defensive', 'focused') and action ('attack', 'ability') and output in JSON matching the schema."
+    )
+
+    try:
+        from google import genai
+        from google.genai import types
+        project_id = os.environ.get("GCP_PROJECT_ID")
+        location = os.environ.get("GCP_LOCATION", "asia-northeast1")
+        api_key = os.environ.get("GEMINI_API_KEY")
+        
+        if project_id:
+            client = genai.Client(vertexai=True, project=project_id, location=location)
+        elif api_key:
+            client = genai.Client(api_key=api_key)
+        else:
+            raise HTTPException(status_code=500, detail="Neither GCP_PROJECT_ID nor GEMINI_API_KEY is configured.")
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=GeminiAgentDecision,
+                temperature=0.1
+            )
+        )
+        
+        decision = GeminiAgentDecision.model_validate_json(response.text)
+        action = decision.action.lower()
+        stance = decision.stance.lower()
+        reasoning = decision.reasoning
+        
+        # Double check constraints (fallback logic)
+        if action not in ["attack", "ability"]:
+            action = "attack"
+        if me.ability_cooldown > 0:
+            action = "attack"
+        if stance not in ["aggressive", "defensive", "focused"]:
+            stance = "focused"
+            
+    except Exception as e:
+        logger.error(f"Managed Battle Agent API call failed: {e}. Falling back to default heuristics.")
+        # Default heuristics
+        if me.ability_cooldown == 0:
+            action = "ability"
+        else:
+            action = "attack"
+        
+        if me.current_health < me.max_health * 0.3:
+            stance = "defensive"
+        elif opp.shield_active:
+            stance = "focused"
+        else:
+            stance = "aggressive"
+        reasoning = "System fallback: standard defensive/offensive heuristic triggered."
+
+    # Execute action lock
+    ready = session.select_action(my_id, action, stance)
+    
+    # Log the decision to the combat logs
+    session.combat_logs.append(f"🤖 [Managed Agent] Decision: {me.card.card_name} switches to {stance.upper()} stance and prepares {action.upper()}.")
+    session.combat_logs.append(f"🤖 [Managed Agent] Analysis: {reasoning}")
+    
+    await session.broadcast_state()
+    
+    if ready:
+        await asyncio.sleep(0.5)
+        session.execute_round()
+        await session.broadcast_state()
+
+    return {
+        "action": action,
+        "stance": stance,
+        "reasoning": reasoning
+    }
 
 @app.post("/api/battle/create")
 def create_battle(request: BattleCreateRequest):

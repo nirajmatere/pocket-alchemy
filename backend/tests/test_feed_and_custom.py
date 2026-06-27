@@ -103,3 +103,45 @@ def test_user_segregation_local_db():
     assert "User B Card" in names_b
     assert "User A Card" not in names_b
 
+def test_battle_agent_play_endpoint():
+    """Verify that the Gemini-powered Managed Battle Agent can successfully play a turn."""
+    # Ensure there's a card in inventory
+    inventory = db_client.get_inventory("local_user")
+    if not inventory:
+        dummy = GameCard(
+            card_name="Dummy Card",
+            element="Neutral",
+            base_stats=CardStats(health=100, attack=50, speed=100),
+            ability_name="Dummy Shield",
+            effect_type="shield",
+            value=0,
+            lore="Dummy lore"
+        )
+        db_client.save_card("local_user", dummy)
+        inventory = db_client.get_inventory("local_user")
+
+    player_card_name = inventory[0]["card_name"]
+    
+    # Create battle session
+    create_res = client.post("/api/battle/create", json={
+        "client_id": "local_user",
+        "card_name": player_card_name,
+        "is_pvp": False
+    })
+    assert create_res.status_code == 200
+    lobby_id = create_res.json()["lobby_id"]
+    
+    # Trigger agent play
+    agent_res = client.post("/api/battle/agent_play", json={
+        "client_id": "local_user",
+        "lobby_id": lobby_id
+    })
+    assert agent_res.status_code == 200
+    agent_data = agent_res.json()
+    assert "action" in agent_data
+    assert "stance" in agent_data
+    assert "reasoning" in agent_data
+    assert agent_data["action"] in ["attack", "ability"]
+    assert agent_data["stance"] in ["aggressive", "defensive", "focused"]
+
+

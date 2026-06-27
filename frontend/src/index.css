@@ -304,3 +304,181 @@
 .damage-popup {
   animation: floating-damage 1.2s ease-out forwards;
 }
+
+/* Mascot Keyframes & Animations */
+@keyframes mascot-dance-kf {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg) scale(1);
+    filter: drop-shadow(0 0 10px rgba(157, 78, 221, 0.4));
+  }
+  25% {
+    transform: translateY(-8px) rotate(-3deg) scale(1.02);
+    filter: drop-shadow(0 0 15px rgba(0, 240, 255, 0.6));
+  }
+  50% {
+    transform: translateY(2px) rotate(0deg) scale(0.98);
+    filter: drop-shadow(0 0 8px rgba(157, 78, 221, 0.3));
+  }
+  75% {
+    transform: translateY(-6px) rotate(3deg) scale(1.02);
+    filter: drop-shadow(0 0 15px rgba(255, 0, 127, 0.6));
+  }
+}
+
+@keyframes mascot-referee-kf {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-4px) scale(1.03);
+    filter: drop-shadow(0 0 8px rgba(0, 240, 255, 0.5));
+  }
+}
+
+@keyframes mascot-happy-kf {
+  0%, 100% {
+    transform: translateY(0) scale(1) rotate(0deg);
+    filter: drop-shadow(0 0 12px rgba(57, 255, 20, 0.6));
+  }
+  25% {
+    transform: translateY(-15px) scale(1.1) rotate(-5deg);
+    filter: drop-shadow(0 0 20px rgba(57, 255, 20, 0.8));
+  }
+  50% {
+    transform: translateY(0) scale(0.95) rotate(5deg);
+  }
+  75% {
+    transform: translateY(-10px) scale(1.05) rotate(-2deg);
+    filter: drop-shadow(0 0 18px rgba(0, 240, 255, 0.7));
+  }
+}
+
+@keyframes mascot-sad-kf {
+  0%, 100% {
+    transform: translateY(0) scale(1) rotate(0deg);
+    filter: grayscale(0.85) opacity(0.8);
+  }
+  50% {
+    transform: translateY(5px) scale(0.95) rotate(-2deg);
+    filter: grayscale(0.95) opacity(0.55);
+  }
+}
+
+.animate-mascot-dance {
+  animation: mascot-dance-kf 3s ease-in-out infinite;
+}
+
+.animate-mascot-referee {
+  animation: mascot-referee-kf 2s ease-in-out infinite;
+}
+
+.animate-mascot-happy {
+  animation: mascot-happy-kf 1.5s ease-in-out infinite;
+}
+
+.animate-mascot-sad {
+  animation: mascot-sad-kf 4.2s ease-in-out infinite;
+}
+
+/* New Phase 2 Animations & Mobile Responsive Adjustments */
+@keyframes bounce-slow-kf {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+.animate-bounce-slow {
+  animation: bounce-slow-kf 3s ease-in-out infinite;
+}
+
+@keyframes battle-log-appear-kf {
+  0% {
+    transform: translateY(20px) scale(0.9);
+    opacity: 0;
+    filter: blur(4px);
+  }
+  15% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+    filter: blur(0);
+  }
+  85% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+    filter: blur(0);
+  }
+  100% {
+    transform: translateY(-20px) scale(0.95);
+    opacity: 0;
+    filter: blur(2px);
+  }
+}
+.animate-log-overlay {
+  animation: battle-log-appear-kf 2.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.alchemical-card {
+  width: 100%;
+  max-width: 285px;
+  height: 400px;
+}
+
+@media (max-width: 640px) {
+  .alchemical-card {
+    max-width: 175px !important;
+    height: 250px !important;
+    padding: 0.5rem !important;
+    border-radius: 0.75rem !important;
+  }
+  
+  .alchemical-card .card-rarity-row {
+    font-size: 7px !important;
+    padding-bottom: 0.25rem !important;
+  }
+  
+  .alchemical-card .card-img-frame {
+    height: 80px !important;
+    margin-top: 0.25rem !important;
+    margin-bottom: 0.25rem !important;
+    border-radius: 0.375rem !important;
+  }
+  
+  .alchemical-card .card-img-frame img {
+    height: 100% !important;
+  }
+  
+  .alchemical-card .card-title-row {
+    margin-top: 0.125rem !important;
+  }
+  
+  .alchemical-card .card-title-row h4 {
+    font-size: 9px !important;
+  }
+  
+  .alchemical-card .card-title-row span {
+    font-size: 8px !important;
+  }
+  
+  .alchemical-card .card-stats-row {
+    font-size: 7px !important;
+    gap: 0.125rem !important;
+  }
+  
+  .alchemical-card .card-stats-row .stat-bar-container {
+    height: 3px !important;
+  }
+  
+  .alchemical-card .card-lore-row {
+    display: none !important;
+  }
+  
+  .alchemical-card .card-action-btn {
+    margin-top: 0.25rem !important;
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.25rem !important;
+    font-size: 8px !important;
+    border-radius: 0.375rem !important;
+  }
+}

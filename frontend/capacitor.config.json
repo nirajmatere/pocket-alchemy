@@ -3,6 +3,7 @@
   "appName": "Pocket Alchemy",
   "webDir": "dist",
   "server": {
-    "androidScheme": "https"
+    "androidScheme": "http",
+    "cleartext": true
   }
 }

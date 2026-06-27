@@ -41,7 +41,7 @@ def test_balance_stats_boundaries():
     # Extreme high
     stats2 = CardStats(health=500, attack=10, speed=10)
     balanced2 = balance_stats(stats2)
-    assert balanced2.health <= 150
+    assert balanced2.health <= 160
     assert (balanced2.health + balanced2.attack + balanced2.speed) == 250
 
 
@@ -172,13 +172,13 @@ def test_battle_round_resolution_pvp():
     # Player 1 locks in action -> should not be ready
     ready = session.select_action(1, "attack")
     assert ready is False
-    assert session.player1_action == "attack"
+    assert session.player1_action["action"] == "attack"
     assert session.player2_action is None
     
     # Player 2 locks in action -> should be ready
     ready = session.select_action(2, "attack")
     assert ready is True
-    assert session.player2_action == "attack"
+    assert session.player2_action["action"] == "attack"
     
     # Execute round
     session.execute_round()

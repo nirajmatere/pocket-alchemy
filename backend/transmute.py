@@ -355,8 +355,17 @@ async def transmute_image_to_card(image_bytes: bytes, filename: str, mime_type: 
             elif "earth" in elem_lower:
                 voice_name = "Aoede"
             
-            # Using Gemini 2.5 Flash to generate audio output
-            audio_response = client.models.generate_content(
+            # Using Gemini 2.5 Flash to generate audio output.
+            # Fall back to using standard Developer API key if available to bypass Vertex AI allowlist constraints.
+            audio_client = client
+            if api_key:
+                try:
+                    logger.info("Initializing Developer API client for audio generation to bypass Vertex AI allowlist constraints...")
+                    audio_client = genai.Client(api_key=api_key)
+                except Exception as audio_client_err:
+                    logger.warning(f"Failed to initialize standard client for audio: {audio_client_err}. Using default client.")
+
+            audio_response = audio_client.models.generate_content(
                 model="gemini-2.5-flash",
                 contents=voice_prompt,
                 config=types.GenerateContentConfig(
@@ -564,7 +573,16 @@ async def fuse_cards(card1: GameCard, card2: GameCard, filename_seed: str) -> Ga
             elif "earth" in elem_lower:
                 voice_name = "Aoede"
                 
-            audio_response = client.models.generate_content(
+            # Fall back to using standard Developer API key if available to bypass Vertex AI allowlist constraints.
+            audio_client = client
+            if api_key:
+                try:
+                    logger.info("Initializing Developer API client for fused audio generation to bypass Vertex AI allowlist constraints...")
+                    audio_client = genai.Client(api_key=api_key)
+                except Exception as audio_client_err:
+                    logger.warning(f"Failed to initialize standard client for audio: {audio_client_err}. Using default client.")
+
+            audio_response = audio_client.models.generate_content(
                 model="gemini-2.5-flash",
                 contents=voice_prompt,
                 config=types.GenerateContentConfig(

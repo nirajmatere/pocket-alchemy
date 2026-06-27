@@ -524,13 +524,18 @@ class BattleSession:
                 self.combat_logs.append(f"⚔️ {attacker.card.card_name} hits {defender.card.card_name} for {actual_dmg} damage!{elem_msg}{stance_msg}")
 
         elif action == "ability":
+            # Guard: ability not available yet — fall back to a normal attack
+            if attacker.ability_cooldown > 0:
+                self.resolve_action(attacker, defender, "attack")
+                return
+
             eff = attacker.card.effect_type
             val = attacker.card.value
-            
+
             # Ability value slight buff if aggressive, or extra speed focus
             if attacker.stance == "aggressive" and eff == "damage":
                 val = int(val * 1.15)
-                
+
             ability_name = attacker.card.ability_name
             self.combat_logs.append(f"✨ {attacker.card.card_name} casts {ability_name}!")
             

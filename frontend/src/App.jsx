@@ -110,10 +110,10 @@ const generateRoomCode = () => {
 
 export default function App() {
   const [clientId] = useState(() => {
-    let id = sessionStorage.getItem('pocket_alchemy_client_id');
+    let id = localStorage.getItem('pocket_alchemy_client_id');
     if (!id) {
       id = 'player_' + Math.random().toString(36).substring(2, 9);
-      sessionStorage.setItem('pocket_alchemy_client_id', id);
+      localStorage.setItem('pocket_alchemy_client_id', id);
     }
     return id;
   });
@@ -765,7 +765,7 @@ export default function App() {
     const stages = [
       'Reading visual metadata & color signatures...',
       'Synthesizing structural materials (checking density)...',
-      'Piping object to Gemini 1.5 Flash Vision Matrix...',
+      'Piping object to Gemini 2.5 Flash Vision Matrix...',
       'Zero-shot alchemical balancing in progress...',
       'Forging card element and elemental abilities...',
       'Summoning card to inventory...'
@@ -1020,6 +1020,11 @@ export default function App() {
         });
       } else if (data.type === 'error') {
         setBattleLogs(prev => [...prev, `[ERROR] ${data.message}`]);
+        toast({ type: 'error', title: 'Room Error', message: data.message });
+        // If room doesn't exist, go back to selection
+        if (data.message && data.message.includes('not found')) {
+          setActiveView('lobby_select');
+        }
       }
     };
 
@@ -1034,7 +1039,10 @@ export default function App() {
       setRoomState(null);
       setActiveView(prev => {
         if (prev === 'lobby' || prev === 'tournament' || prev === 'battle') {
-          toast({ type: 'warn', title: 'Connection Lost', message: 'Disconnected from room. Returning to lobby selection.' });
+          // Only show "connection lost" toast if we didn't already navigate away via an error
+          if (prev !== 'lobby_select') {
+            toast({ type: 'warn', title: 'Connection Lost', message: 'Disconnected from room. Returning to lobby selection.' });
+          }
           return 'lobby_select';
         }
         return prev;

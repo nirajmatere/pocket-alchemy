@@ -280,13 +280,19 @@ class AlchemicalDB:
             except Exception as e:
                 logger.error(f"Firestore submit_to_leaderboard error: {e}")
 
-        # Local fallback
-        leaderboard = self.get_leaderboard()
-        leaderboard = [x for x in leaderboard if x.get("card_name") != card.card_name]
-        leaderboard.append(card_dict)
+        # Local fallback — read the full file (not the capped getter) so no cards are dropped
+        all_entries = []
+        if os.path.exists(self.local_leaderboard_file):
+            try:
+                with open(self.local_leaderboard_file, "r") as f:
+                    all_entries = json.load(f)
+            except Exception as e:
+                logger.error(f"Local leaderboard read error: {e}")
+        all_entries = [x for x in all_entries if x.get("card_name") != card.card_name or x.get("creator_id") != client_id]
+        all_entries.append(card_dict)
         try:
             with open(self.local_leaderboard_file, "w") as f:
-                json.dump(leaderboard, f, indent=2)
+                json.dump(all_entries, f, indent=2)
             logger.info("Submitted to local leaderboard file.")
         except Exception as e:
             logger.error(f"Local leaderboard submit error: {e}")
@@ -549,7 +555,7 @@ def campaign_fight(request: CampaignFightRequest):
         raise HTTPException(status_code=404, detail="Card not found in inventory.")
         
     player_card = GameCard.model_validate(target_card_dict)
-    lobby_id = f"c_{str(uuid.uuid4())[:6]}"
+    lobby_id = f"C_{str(uuid.uuid4())[:6].upper()}"
     
     session = BattleSession(lobby_id, player_card, is_pvp=False, campaign_stage=request.stage)
     battle_sessions[lobby_id] = session
@@ -928,13 +934,13 @@ def create_battle(request: BattleCreateRequest):
                 chosen_dict = random.choice(other_cards)
                 opponent_card = GameCard.model_validate(chosen_dict)
             
-    lobby_id = str(uuid.uuid4())[:8]
-    
+    lobby_id = str(uuid.uuid4())[:8].upper()
+
     session = BattleSession(lobby_id, player_card, is_pvp=is_pvp, opponent_card=opponent_card)
     battle_sessions[lobby_id] = session
-    
+
     return {
-        "lobby_id": lobby_id, 
+        "lobby_id": lobby_id,
         "is_pvp": is_pvp,
         "boss_name": session.player2.card.card_name if not is_pvp else None
     }
@@ -973,10 +979,13 @@ def join_battle(request: BattleJoinRequest):
 
 @app.websocket("/ws/room/{lobby_id}/{client_id}")
 async def websocket_room(websocket: WebSocket, lobby_id: str, client_id: str):
+    lobby_id = lobby_id.upper()
     session = battle_sessions.get(lobby_id)
     if not session:
-        session = BattleSession(lobby_id, None, is_pvp=True)
-        battle_sessions[lobby_id] = session
+        await websocket.accept()
+        await websocket.send_json({"type": "error", "message": f"Room '{lobby_id}' not found. Please check the code and try again."})
+        await websocket.close()
+        return
 
     await websocket.accept()
     

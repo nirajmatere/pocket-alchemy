@@ -9,6 +9,11 @@ const getHostIp = () => {
 const getApiBase = () => {
   const host = getHostIp();
   if (typeof window === 'undefined') return `http://${host}:8000`;
+  
+  if (host.startsWith('http://') || host.startsWith('https://')) {
+    return host;
+  }
+  
   const hn = window.location.hostname;
   
   if (localStorage.getItem('pocket_alchemy_backend_ip') || window.Capacitor) {
@@ -18,12 +23,21 @@ const getApiBase = () => {
   if (hn === '' || hn === 'localhost' && window.location.port === '') {
     return `http://${host}:8000`;
   }
-  return `${window.location.protocol}//${window.location.hostname}:8000`;
+  
+  if (window.location.port === '5173') {
+    return `${window.location.protocol}//${window.location.hostname}:8000`;
+  }
+  return window.location.origin;
 };
 
 const getWsBase = () => {
   const host = getHostIp();
   if (typeof window === 'undefined') return `ws://${host}:8000`;
+  
+  if (host.startsWith('http://') || host.startsWith('https://')) {
+    return host.replace('http://', 'ws://').replace('https://', 'wss://');
+  }
+  
   const hn = window.location.hostname;
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   
@@ -34,7 +48,11 @@ const getWsBase = () => {
   if (hn === '' || hn === 'localhost' && window.location.port === '') {
     return `ws://${host}:8000`;
   }
-  return `${protocol}//${window.location.hostname}:8000`;
+  
+  if (window.location.port === '5173') {
+    return `${protocol}//${window.location.hostname}:8000`;
+  }
+  return `${protocol}//${window.location.host}`;
 };
 
 const API_BASE = getApiBase();

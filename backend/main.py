@@ -24,6 +24,20 @@ if os.path.exists(env_path):
                     key, val = stripped.split("=", 1)
                     os.environ[key] = val
 
+# Robustly resolve GOOGLE_APPLICATION_CREDENTIALS to an absolute path
+gac = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+if gac and not os.path.isabs(gac):
+    possible_paths = [
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", gac)),
+        os.path.abspath(os.path.join(os.path.dirname(__file__), gac)),
+        os.path.abspath(gac)
+    ]
+    for p in possible_paths:
+        if os.path.exists(p):
+            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = p
+            break
+
+
 from backend.transmute import transmute_image_to_card, fuse_cards, GameCard, CardStats
 from backend.battle import BattleSession, CAMPAIGN_BOSSES
 

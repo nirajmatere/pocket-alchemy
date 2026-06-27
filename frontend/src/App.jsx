@@ -1,7 +1,7 @@
 /* eslint-disable no-unused-vars */
 import { useState, useEffect, useRef } from 'react';
 
-const HOST_IP = 'https://pocket-alchemy-backend-665383661867.asia-northeast1.run.app'; // Live backend URL
+const HOST_IP = 'https://pocket-alchemy-backend-440102621899.asia-northeast1.run.app'; // Live backend URL
 
 const getHostIp = () => {
   return localStorage.getItem('pocket_alchemy_backend_ip') || HOST_IP;

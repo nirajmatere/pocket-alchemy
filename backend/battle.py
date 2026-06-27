@@ -262,6 +262,14 @@ class BattleSession:
         self.post_match_summary = ""
         self.rewards = {}
 
+        # Tournament state
+        self.tournament_active = False
+        self.tournament_leaderboard = []
+        self.tournament_matches = []
+        self.tournament_winner_id = None
+        self.tournament_rewards = {}
+        self.owner_id = None
+
         # Pre-populate player 1 if card provided
         if player1_card:
             self.player1 = ActiveFighter(player1_card)
@@ -269,7 +277,7 @@ class BattleSession:
             self.members["1"] = {
                 "client_id": "1",
                 "card": player1_card,
-                "status": "fighting" if is_pvp else "spectating",
+                "status": "spectating",
                 "ws": None
             }
 
@@ -298,19 +306,38 @@ class BattleSession:
 
     def register_member(self, client_id: str, card: GameCard, ws: WebSocket):
         """Adds a member to the room lobby list."""
-        self.members[client_id] = {
-            "client_id": client_id,
-            "card": card,
-            "status": "spectating",
-            "ws": ws
-        }
+        if client_id in self.members:
+            self.members[client_id]["card"] = card
+            if ws:
+                self.members[client_id]["ws"] = ws
+        else:
+            self.members[client_id] = {
+                "client_id": client_id,
+                "card": card,
+                "status": "spectating",
+                "ws": ws
+            }
+        
+        # Set room owner if not set
+        if not self.owner_id:
+            self.owner_id = client_id
+
         # If is_pvp and player 1 ID is not registered or is the "1" placeholder, assign it
         if self.is_pvp and (not self.player1_id or self.player1_id == "1"):
             if "1" in self.members and client_id != "1":
                 del self.members["1"]
             self.player1_id = client_id
-            self.player1 = ActiveFighter(card)
-            self.members[client_id]["status"] = "fighting"
+            if card:
+                self.player1 = ActiveFighter(card)
+            else:
+                self.player1 = None
+            self.members[client_id]["status"] = "spectating"
+        elif self.is_pvp and self.player1_id == client_id:
+            # Update player 1 ActiveFighter if card was updated
+            if card:
+                self.player1 = ActiveFighter(card)
+            else:
+                self.player1 = None
 
     def remove_member(self, client_id: str):
         """Removes a member. Resets active battles if a fighter leaves."""
@@ -323,6 +350,14 @@ class BattleSession:
             self.combat_logs.append("⚠️ A fighter disconnected. Arena protocol terminated.")
             self.player1_id = None
             self.player2_id = None
+            self.player1 = None
+            self.player2 = None
+
+        if client_id == self.owner_id:
+            if self.members:
+                self.owner_id = list(self.members.keys())[0]
+            else:
+                self.owner_id = None
 
     def challenge_player(self, challenger_id: str, target_id: str) -> bool:
         """Initiates a challenge in the room."""
@@ -592,7 +627,13 @@ class BattleSession:
             "lobby_id": self.lobby_id,
             "is_pvp": self.is_pvp,
             "members": members_list,
-            "active_match": active_match
+            "active_match": active_match,
+            "owner_id": self.owner_id,
+            "tournament_active": self.tournament_active,
+            "tournament_leaderboard": self.tournament_leaderboard,
+            "tournament_matches": self.tournament_matches,
+            "tournament_winner_id": self.tournament_winner_id,
+            "tournament_rewards": self.tournament_rewards
         }
         
         for m in list(self.members.values()):
@@ -602,3 +643,242 @@ class BattleSession:
                 await m["ws"].send_json(payload)
             except Exception as e:
                 logger.error(f"Failed broadcasting to client {m['client_id']}: {e}")
+
+    def reset_tournament(self):
+        """Resets the tournament back to lobby status."""
+        self.tournament_active = False
+        self.tournament_leaderboard = []
+        self.tournament_matches = []
+        self.tournament_winner_id = None
+        self.tournament_rewards = {}
+        for m in self.members.values():
+            m["status"] = "spectating"
+
+    def start_tournament(self) -> bool:
+        """Starts a round robin auto-simulated tournament between all members with registered cards."""
+        participants = [m for m in self.members.values() if m.get("card") is not None]
+        if len(participants) < 2:
+            self.combat_logs.append("⚠️ Cannot start tournament: At least 2 players with cards are required.")
+            return False
+
+        self.tournament_active = True
+        self.tournament_matches = []
+        self.tournament_leaderboard = []
+        self.tournament_winner_id = None
+        self.tournament_rewards = {}
+
+        # Reset active match states
+        self.player1_id = None
+        self.player2_id = None
+        self.player1 = None
+        self.player2 = None
+        self.game_over = False
+
+        import itertools
+        
+        # Initialize stats for each participant
+        stats = {
+            p["client_id"]: {
+                "client_id": p["client_id"],
+                "card_name": p["card"].card_name,
+                "wins": 0,
+                "losses": 0,
+                "draws": 0,
+                "points": 0
+            }
+            for p in participants
+        }
+
+        # Matchmaking: Round Robin combinations
+        match_index = 1
+        for p1_info, p2_info in itertools.combinations(participants, 2):
+            card1 = p1_info["card"]
+            card2 = p2_info["card"]
+            
+            f1 = ActiveFighter(card1)
+            f2 = ActiveFighter(card2)
+            
+            match_logs = [f"⚔️ Tournament Match {match_index}: {card1.card_name} vs {card2.card_name}!"]
+            
+            round_num = 1
+            winner_id = None
+            draw = False
+            
+            while f1.current_health > 0 and f2.current_health > 0:
+                if round_num > 50:
+                    draw = True
+                    break
+                
+                # Basic AI stance selection
+                def get_ai_stance(fighter, opponent):
+                    if fighter.current_health < fighter.max_health * 0.3:
+                        return random.choice(["defensive", "focused", "defensive"])
+                    elif opponent.shield_active:
+                        return random.choice(["focused", "defensive", "focused"])
+                    else:
+                        return random.choice(["aggressive", "focused", "aggressive"])
+                
+                stance1 = get_ai_stance(f1, f2)
+                stance2 = get_ai_stance(f2, f1)
+                
+                f1.stance = stance1
+                f2.stance = stance2
+                
+                f1.tick_cooldown()
+                f2.tick_cooldown()
+                
+                # Action selection: use ability if cooldown is 0, else attack
+                act1 = "ability" if f1.ability_cooldown == 0 else "attack"
+                act2 = "ability" if f2.ability_cooldown == 0 else "attack"
+                
+                # Speed modified by stance
+                s1 = f1.speed + f1.speed_buff
+                if stance1 == "focused": s1 = int(s1 * 1.25)
+                elif stance1 == "aggressive": s1 = int(s1 * 0.9)
+                
+                s2 = f2.speed + f2.speed_buff
+                if stance2 == "focused": s2 = int(s2 * 1.25)
+                elif stance2 == "aggressive": s2 = int(s2 * 0.9)
+                
+                if s1 == s2:
+                    p1_first = random.choice([True, False])
+                else:
+                    p1_first = s1 > s2
+                
+                match_logs.append(f"--- Round {round_num} (Stances: {card1.card_name} [{stance1.upper()}], {card2.card_name} [{stance2.upper()}]) ---")
+                
+                first_f = f1 if p1_first else f2
+                second_f = f2 if p1_first else f1
+                first_act = act1 if p1_first else act2
+                second_act = act2 if p1_first else act1
+                
+                # First strike
+                self._sim_resolve_action(first_f, second_f, first_act, match_logs)
+                if second_f.current_health <= 0:
+                    winner_id = p1_info["client_id"] if p1_first else p2_info["client_id"]
+                    break
+                    
+                # Second strike
+                self._sim_resolve_action(second_f, first_f, second_act, match_logs)
+                if first_f.current_health <= 0:
+                    winner_id = p2_info["client_id"] if p1_first else p1_info["client_id"]
+                    break
+                
+                round_num += 1
+                
+            if draw:
+                match_logs.append("⏱️ Match reached limit of 50 rounds! It's a draw.")
+                stats[p1_info["client_id"]]["draws"] += 1
+                stats[p1_info["client_id"]]["points"] += 1
+                stats[p2_info["client_id"]]["draws"] += 1
+                stats[p2_info["client_id"]]["points"] += 1
+                winner_name = "Draw"
+            else:
+                winner_card = card1.card_name if winner_id == p1_info["client_id"] else card2.card_name
+                match_logs.append(f"🏆 {winner_card} wins the match!")
+                stats[winner_id]["wins"] += 1
+                stats[winner_id]["points"] += 3
+                
+                loser_id = p2_info["client_id"] if winner_id == p1_info["client_id"] else p1_info["client_id"]
+                stats[loser_id]["losses"] += 1
+                winner_name = winner_card
+                
+            self.tournament_matches.append({
+                "match_index": match_index,
+                "player1_id": p1_info["client_id"],
+                "player2_id": p2_info["client_id"],
+                "player1_name": card1.card_name,
+                "player2_name": card2.card_name,
+                "player1_image": card1.image_url,
+                "player2_image": card2.image_url,
+                "winner_id": winner_id,
+                "winner_name": winner_name,
+                "draw": draw,
+                "logs": match_logs
+            })
+            match_index += 1
+
+        # Rank participants
+        leaderboard = list(stats.values())
+        leaderboard.sort(key=lambda x: (x["points"], x["wins"]), reverse=True)
+        self.tournament_leaderboard = leaderboard
+
+        # Award Rewards
+        if leaderboard:
+            top_winner = leaderboard[0]
+            self.tournament_winner_id = top_winner["client_id"]
+            self.tournament_rewards = {
+                "aether_dust": 150,
+                "catalysts": 2
+            }
+            
+            try:
+                from backend.main import db_client
+                profile = db_client.get_profile(self.tournament_winner_id)
+                profile["aether_dust"] = profile.get("aether_dust", 0) + self.tournament_rewards["aether_dust"]
+                profile["catalysts"] = profile.get("catalysts", 0) + self.tournament_rewards["catalysts"]
+                db_client.update_profile(self.tournament_winner_id, profile)
+                logger.info(f"Tournament rewards successfully credited to user {self.tournament_winner_id}")
+            except Exception as e:
+                logger.error(f"Failed to award tournament rewards: {e}")
+
+        # Set status of everyone in the room to "spectating" since tournament is over
+        for m in self.members.values():
+            m["status"] = "spectating"
+
+        return True
+
+    def _sim_resolve_action(self, attacker: ActiveFighter, defender: ActiveFighter, action: str, match_logs: List[str]):
+        if attacker.current_health <= 0:
+            return
+
+        if action == "attack":
+            base_dmg = attacker.attack + attacker.attack_buff
+            if attacker.stance == "aggressive":
+                base_dmg = int(base_dmg * 1.2)
+            elif attacker.stance == "defensive":
+                base_dmg = int(base_dmg * 0.8)
+                
+            variance = random.uniform(0.9, 1.1)
+            raw_dmg = base_dmg * variance
+            mult = get_element_multiplier(attacker.card.element, defender.card.element)
+            final_dmg = int(raw_dmg * mult)
+            
+            blocked = defender.shield_active
+            actual_dmg = defender.apply_damage(final_dmg)
+            
+            elem_msg = f" ({mult}x Element Match!)" if mult > 1.0 else f" ({mult}x Disadvantage)" if mult < 1.0 else ""
+            stance_msg = " [AGGRESSIVE Strike]" if attacker.stance == "aggressive" else " [DEFENSIVE Poke]" if attacker.stance == "defensive" else ""
+            
+            if blocked:
+                match_logs.append(f"🛡️ {defender.card.card_name} blocked {attacker.card.card_name}'s strike!")
+            else:
+                match_logs.append(f"⚔️ {attacker.card.card_name} hits {defender.card.card_name} for {actual_dmg} damage!{elem_msg}{stance_msg}")
+
+        elif action == "ability":
+            eff = attacker.card.effect_type
+            val = attacker.card.value
+            
+            if attacker.stance == "aggressive" and eff == "damage":
+                val = int(val * 1.15)
+                
+            ability_name = attacker.card.ability_name
+            match_logs.append(f"✨ {attacker.card.card_name} casts {ability_name}!")
+            
+            if eff == "damage":
+                actual_dmg = defender.apply_damage(val)
+                match_logs.append(f"💥 Magical ability deals {actual_dmg} direct damage to {defender.card.card_name}!")
+            elif eff == "heal":
+                healed = attacker.heal(val)
+                match_logs.append(f"❤️ Healed for +{healed} HP! ({attacker.current_health}/{attacker.max_health})")
+            elif eff == "boost_attack":
+                attacker.attack_buff += val
+                match_logs.append(f"💪 Attack temporarily boosted by +{val}!")
+            elif eff == "boost_speed":
+                attacker.speed_buff += val
+                match_logs.append(f"⚡ Speed temporarily boosted by +{val}!")
+            elif eff == "shield":
+                attacker.shield_active = True
+                match_logs.append(f"🛡️ Alchemical shield active! Blocks next strike.")
+            
+            attacker.reset_cooldown()

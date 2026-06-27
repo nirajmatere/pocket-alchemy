@@ -153,6 +153,13 @@ export default function App() {
   const [challengerTargetOpponent, setChallengerTargetOpponent] = useState(null);
   const [showFighterSelectorModal, setShowFighterSelectorModal] = useState(false);
 
+  // Tournament View States
+  const [tournamentMatchIndex, setTournamentMatchIndex] = useState(0);
+  const [tournamentMatchLogs, setTournamentMatchLogs] = useState([]);
+  const [tournamentMatchesCompleted, setTournamentMatchesCompleted] = useState([]);
+  const [tournamentRunningLocal, setTournamentRunningLocal] = useState(false);
+  const [showRoomCardSelectorModal, setShowRoomCardSelectorModal] = useState(false);
+
   const [animatedLogQueue, setAnimatedLogQueue] = useState([]);
   const [displayedLog, setDisplayedLog] = useState(null);
   const lastLogCountRef = useRef(0);
@@ -446,6 +453,46 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [battleState?.round_number]);
 
+  // Local Tournament simulation animation sequence
+  useEffect(() => {
+    if (!tournamentRunningLocal || !roomState || !roomState.tournament_matches) return;
+    
+    const matches = roomState.tournament_matches;
+    if (tournamentMatchIndex >= matches.length) {
+      return;
+    }
+    
+    const currentMatch = matches[tournamentMatchIndex];
+    let logIdx = 0;
+    setTournamentMatchLogs([currentMatch.logs[0]]);
+    
+    const logInterval = setInterval(() => {
+      logIdx++;
+      if (logIdx < currentMatch.logs.length) {
+        setTournamentMatchLogs(prev => [...prev, currentMatch.logs[logIdx]]);
+      } else {
+        clearInterval(logInterval);
+        
+        setTimeout(() => {
+          setTournamentMatchesCompleted(prev => [...prev, tournamentMatchIndex]);
+          setTournamentMatchIndex(prev => prev + 1);
+        }, 2000);
+      }
+    }, 400);
+    
+    return () => clearInterval(logInterval);
+  }, [tournamentRunningLocal, tournamentMatchIndex, roomState?.tournament_matches]);
+
+  // Auto-prompt to select card when entering lobby without a champion
+  useEffect(() => {
+    if (activeView === 'lobby' && roomState) {
+      const myInfo = roomState.members?.find(m => m.client_id === clientId);
+      if (myInfo && myInfo.card_name === 'Unregistered') {
+        setShowRoomCardSelectorModal(true);
+      }
+    }
+  }, [activeView, roomState, clientId]);
+
   const captureFrameAndTransmute = () => {
     if (!videoRef.current || !canvasRef.current) return;
     const video = videoRef.current;
@@ -681,7 +728,7 @@ export default function App() {
       // Register card
       ws.send(JSON.stringify({
         action: "register",
-        card: cardToRegister
+        card: cardToRegister || null
       }));
     };
 
@@ -689,6 +736,23 @@ export default function App() {
       const data = JSON.parse(event.data);
       if (data.type === 'room_state') {
         setRoomState(data);
+        
+        if (data.tournament_active) {
+          setActiveView('tournament');
+          setTournamentRunningLocal(prevRunning => {
+            if (!prevRunning) {
+              setTournamentMatchIndex(0);
+              setTournamentMatchesCompleted([]);
+              setTournamentMatchLogs([]);
+              return true;
+            }
+            return prevRunning;
+          });
+        } else {
+          setTournamentRunningLocal(false);
+          setActiveView(prev => prev === 'tournament' ? 'lobby' : prev);
+        }
+
         if (data.active_match) {
           setBattleState(data.active_match);
           if (data.active_match.logs) {
@@ -704,9 +768,12 @@ export default function App() {
         } else {
           setBattleState(null);
           // If game is over and cleared on server, return to lobby dashboard
-          if (activeView === 'battle' && data.is_pvp) {
-            setActiveView('lobby');
-          }
+          setActiveView(prev => {
+            if (prev === 'battle' && data.is_pvp) {
+              return 'lobby';
+            }
+            return prev;
+          });
         }
       } else if (data.type === 'challenge_received') {
         setIncomingChallenge({
@@ -718,8 +785,22 @@ export default function App() {
       }
     };
 
+    ws.onerror = (error) => {
+      console.error("WebSocket error:", error);
+      alert("WebSocket connection error. Please verify your backend server is active and reachable.");
+    };
+
     ws.onclose = () => {
       console.log("WebSocket room disconnected");
+      setSocket(null);
+      setRoomState(null);
+      setActiveView(prev => {
+        if (prev === 'lobby' || prev === 'tournament' || prev === 'battle') {
+          alert("Connection lost. Returning to PvP room selection.");
+          return 'lobby_select';
+        }
+        return prev;
+      });
     };
 
     setSocket(ws);
@@ -857,12 +938,63 @@ export default function App() {
     return `Round ${battleState.round_number} is underway! Choose your stance and strike!`;
   };
 
+  const getLocalLeaderboard = () => {
+    if (!roomState || !roomState.tournament_matches) return [];
+    const completedMatches = roomState.tournament_matches.slice(0, tournamentMatchesCompleted.length);
+    
+    const playerStats = {};
+    roomState.members.filter(m => m.card_name !== 'Unregistered').forEach(m => {
+      playerStats[m.client_id] = {
+        client_id: m.client_id,
+        card_name: m.card_name,
+        wins: 0,
+        losses: 0,
+        draws: 0,
+        points: 0
+      };
+    });
+    
+    completedMatches.forEach(m => {
+      if (m.draw) {
+        if (playerStats[m.player1_id]) {
+          playerStats[m.player1_id].draws += 1;
+          playerStats[m.player1_id].points += 1;
+        }
+        if (playerStats[m.player2_id]) {
+          playerStats[m.player2_id].draws += 1;
+          playerStats[m.player2_id].points += 1;
+        }
+      } else {
+        const winnerId = m.winner_id;
+        const loserId = m.winner_id === m.player1_id ? m.player2_id : m.player1_id;
+        if (playerStats[winnerId]) {
+          playerStats[winnerId].wins += 1;
+          playerStats[winnerId].points += 3;
+        }
+        if (playerStats[loserId]) {
+          playerStats[loserId].losses += 1;
+        }
+      }
+    });
+    
+    const list = Object.values(playerStats);
+    list.sort((a, b) => (b.points - a.points) || (b.wins - a.wins));
+    return list;
+  };
+
+  const skipSimulation = () => {
+    if (!roomState || !roomState.tournament_matches) return;
+    const allCompleted = roomState.tournament_matches.map((_, i) => i);
+    setTournamentMatchesCompleted(allCompleted);
+    setTournamentMatchIndex(roomState.tournament_matches.length);
+  };
+
   const { me, opponent, isSpectator } = getFightersForDisplay();
 
   return (
     <div className={`flex flex-col text-slate-100 w-full ${activeView === 'battle' ? 'h-screen max-h-screen overflow-hidden p-2' : 'min-h-screen p-4 md:p-6 max-w-7xl mx-auto'}`}>
       {/* HEADER NAVBAR */}
-      {activeView !== 'battle' && (
+      {(activeView !== 'battle' && activeView !== 'tournament') && (
         <header className="flex flex-col sm:flex-row items-center justify-between border-b border-white/10 pb-4 mb-6 gap-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-gradient-to-tr from-cyber-purple to-cyber-blue flex items-center justify-center font-mono font-bold text-black text-xl shadow-[0_0_15px_rgba(157,78,221,0.6)]">
@@ -893,19 +1025,20 @@ export default function App() {
                 { view: 'inventory', label: '2. ALCHEMY VAULT', color: 'border-cyber-blue/20 hover:border-cyber-blue/40 hover:text-slate-200', activeColor: 'bg-cyber-blue text-black border-cyber-blue shadow-[0_0_10px_rgba(0,240,255,0.4)]' },
                 { view: 'leaderboard', label: '3. LEADERBOARD', color: 'border-cyber-green/20 hover:border-cyber-green/40 hover:text-slate-200', activeColor: 'bg-cyber-green text-black border-cyber-green shadow-[0_0_10px_rgba(57,255,20,0.4)]' },
                 { view: 'badges', label: '4. BADGES VAULT', color: 'border-cyber-pink/20 hover:border-cyber-pink/40 hover:text-slate-200', activeColor: 'bg-cyber-pink text-black border-cyber-pink shadow-[0_0_10px_rgba(255,0,127,0.4)]' },
-                { view: 'feed', label: '5. TODAY\'S FEED', color: 'border-cyber-yellow/20 hover:border-cyber-yellow/40 hover:text-slate-200', activeColor: 'bg-cyber-yellow text-black border-cyber-yellow shadow-[0_0_10px_rgba(255,251,0,0.4)]' }
+                { view: 'feed', label: '5. TODAY\'S FEED', color: 'border-cyber-yellow/20 hover:border-cyber-yellow/40 hover:text-slate-200', activeColor: 'bg-cyber-yellow text-black border-cyber-yellow shadow-[0_0_10px_rgba(255,251,0,0.4)]' },
+                { view: 'lobby_select', label: '6. PVP ROOMS', color: 'border-cyber-blue/20 hover:border-cyber-blue/40 hover:text-slate-200', activeColor: 'bg-cyber-blue text-black border-cyber-blue shadow-[0_0_10px_rgba(0,240,255,0.4)]' }
               ].map((tab) => (
                 <button
                   key={tab.view}
                   onClick={() => {
-                    if (activeView !== 'battle') {
+                    if (activeView !== 'battle' && activeView !== 'lobby' && activeView !== 'tournament') {
                       setActiveView(tab.view);
                       if (tab.view === 'inventory') fetchInventory();
                       else if (tab.view === 'feed') fetchTodayFeed();
                       else fetchDashboardData();
                     }
                   }}
-                  disabled={activeView === 'battle'}
+                  disabled={activeView === 'battle' || activeView === 'lobby' || activeView === 'tournament'}
                   className={`px-3 py-1.5 rounded-lg font-mono text-xs font-semibold transition-all border ${activeView === tab.view ? tab.activeColor : `bg-transparent text-slate-400 ${tab.color} disabled:opacity-40`
                     }`}
                 >
@@ -1738,6 +1871,24 @@ export default function App() {
       )}
 
       {/* VIEW 4: ROOM LOBBY DASHBOARD */}
+      {activeView === 'lobby' && !roomState && (
+        <div className="flex-1 flex flex-col items-center justify-center py-20 font-mono">
+          <div className="w-12 h-12 rounded-full border-2 border-t-transparent border-cyber-blue animate-spin mb-4" />
+          <p className="text-sm text-slate-300 uppercase tracking-widest animate-pulse">
+            Synchronizing Alchemical Matrix...
+          </p>
+          <p className="text-xs text-slate-500 mt-2">
+            Connecting to room socket {lobbyId}
+          </p>
+          <button
+            onClick={quitBattle}
+            className="mt-6 px-4 py-2 rounded bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 text-xs font-mono transition-all cursor-pointer"
+          >
+            Cancel Connection
+          </button>
+        </div>
+      )}
+
       {activeView === 'lobby' && roomState && (
         <div className="flex-1 flex flex-col gap-6">
           <div className="cyber-glass rounded-xl p-4 border border-white/10 flex flex-col md:flex-row justify-between items-center bg-black/40 gap-4">
@@ -1751,9 +1902,28 @@ export default function App() {
             </div>
 
             <div className="flex gap-3">
+              {clientId === roomState.owner_id && (
+                <button
+                  onClick={() => {
+                    const activeParticipants = roomState.members.filter(m => m.card_name !== 'Unregistered');
+                    if (activeParticipants.length < 2) {
+                      alert("Tournament requires at least 2 players with registered champion cards.");
+                      return;
+                    }
+                    if (socket && socket.readyState === WebSocket.OPEN) {
+                      socket.send(JSON.stringify({
+                        action: "start_tournament"
+                      }));
+                    }
+                  }}
+                  className="px-4 py-2 rounded-lg bg-cyber-green text-black font-mono font-bold text-xs uppercase hover:brightness-110 transition-all shadow-[0_0_10px_rgba(57,255,20,0.3)] cursor-pointer"
+                >
+                  🏆 START TOURNAMENT
+                </button>
+              )}
               <button
                 onClick={quitBattle}
-                className="px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 text-xs font-mono transition-all"
+                className="px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 text-xs font-mono transition-all cursor-pointer"
               >
                 LEAVE ROOM
               </button>
@@ -1772,8 +1942,11 @@ export default function App() {
                 <div className="space-y-4">
                   {roomState.members.map((member) => {
                     const isSelf = member.client_id === clientId;
-                    const isCurrentSpectating = roomState.members.find(m => m.client_id === clientId)?.status === 'spectating';
-                    const canChallenge = !isSelf && member.status === 'spectating' && isCurrentSpectating;
+                    const myInfo = roomState.members.find(m => m.client_id === clientId);
+                    const myCardSelected = myInfo && myInfo.card_name !== 'Unregistered';
+                    const isCurrentSpectating = myInfo?.status === 'spectating';
+                    const targetHasCard = member.card_name !== 'Unregistered';
+                    const canChallenge = !isSelf && member.status === 'spectating' && isCurrentSpectating && targetHasCard && myCardSelected;
 
                     return (
                       <div
@@ -1783,8 +1956,9 @@ export default function App() {
                         <div className="flex items-center gap-3">
                           <span className="text-2xl">🔮</span>
                           <div>
-                            <p className="font-mono text-sm font-bold uppercase text-slate-200">
-                              {member.card_name} {isSelf && <span className="text-xs text-cyber-purple font-normal lowercase">(you)</span>}
+                            <p className="font-mono text-sm font-bold uppercase text-slate-200 flex items-center gap-1.5">
+                              {roomState.owner_id === member.client_id && <span title="Room Owner" className="text-yellow-400">👑</span>}
+                              {member.card_name === 'Unregistered' ? 'No Champion Selected' : member.card_name} {isSelf && <span className="text-xs text-cyber-purple font-normal lowercase">(you)</span>}
                             </p>
                             <p className="text-[10px] text-slate-500 font-mono tracking-wider">
                               ID: {member.client_id}
@@ -1803,6 +1977,15 @@ export default function App() {
                             }`}>
                             {member.status}
                           </span>
+
+                          {isSelf && (
+                            <button
+                              onClick={() => setShowRoomCardSelectorModal(true)}
+                              className="px-3 py-1.5 rounded bg-cyber-blue/10 border border-cyber-blue/30 text-cyber-blue hover:bg-cyber-blue/20 font-mono text-[10px] font-bold uppercase transition-all cursor-pointer"
+                            >
+                              {member.card_name === 'Unregistered' ? 'Choose Champion' : 'Change Card'}
+                            </button>
+                          )}
 
                           {canChallenge && (
                             <button
@@ -1917,6 +2100,324 @@ export default function App() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* VIEW 4.2: PVP ROOMS SELECTION */}
+      {activeView === 'lobby_select' && (
+        <div className="flex-1 flex flex-col items-center justify-center p-4">
+          <div className="max-w-md w-full cyber-glass border border-white/10 p-8 rounded-2xl shadow-2xl relative">
+            <h2 className="text-xl font-bold font-mono uppercase tracking-wider mb-6 text-center text-cyber-blue">
+              🔮 PvP Arenas & Lobbies
+            </h2>
+            <p className="text-xs text-slate-400 font-mono text-center mb-8 leading-relaxed">
+              Create a custom alchemical battlefield, invite friends using a room code, or auto-run tournaments.
+            </p>
+
+            <div className="space-y-6">
+              <button
+                onClick={() => {
+                  const code = 'ROOM-' + Math.random().toString(36).slice(2, 6).toUpperCase();
+                  setIsPvp(true);
+                  setLobbyId(code);
+                  connectRoomWebSocket(code, null);
+                  setActiveView('lobby');
+                }}
+                className="w-full py-4 rounded-xl bg-gradient-to-r from-cyber-purple to-cyber-blue hover:brightness-110 active:scale-98 font-bold font-mono text-sm uppercase tracking-wider text-black transition-all cursor-pointer shadow-[0_0_15px_rgba(0,240,255,0.3)] text-center"
+              >
+                Host New PvP Lobby
+              </button>
+
+              <div className="relative flex py-2 items-center">
+                <div className="flex-grow border-t border-white/5"></div>
+                <span className="flex-shrink mx-4 text-slate-500 text-[10px] font-mono uppercase">OR</span>
+                <div className="flex-grow border-t border-white/5"></div>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <label className="text-[10px] text-slate-400 font-mono uppercase">Enter Lobby Room Code</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="LOBBY CODE (e.g. ROOM-ABCD)"
+                    value={joinRoomCode}
+                    onChange={(e) => setJoinRoomCode(e.target.value.toUpperCase())}
+                    className="flex-1 bg-slate-950 border border-white/15 rounded-lg px-4 py-3 text-center font-mono tracking-wider font-semibold placeholder:text-slate-700 focus:outline-none focus:border-cyber-blue text-sm"
+                  />
+                  <button
+                    onClick={() => {
+                      if (!joinRoomCode.trim()) {
+                        alert("Please enter a Room Code");
+                        return;
+                      }
+                      const code = joinRoomCode.trim().toUpperCase();
+                      setIsPvp(true);
+                      setLobbyId(code);
+                      connectRoomWebSocket(code, null);
+                      setActiveView('lobby');
+                    }}
+                    className="px-6 rounded-lg bg-cyber-blue hover:brightness-110 active:scale-95 text-black font-mono font-bold text-xs uppercase transition-all cursor-pointer"
+                  >
+                    Join
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* VIEW 4.5: TOURNAMENT ARENA */}
+      {activeView === 'tournament' && roomState && roomState.tournament_matches && (
+        <div className="flex-1 flex flex-col gap-4 font-mono select-none overflow-hidden h-screen max-h-screen p-2">
+          {/* Header */}
+          <div className="flex justify-between items-center bg-black/60 border border-white/10 px-4 py-2 rounded-xl text-xs shrink-0">
+            <div>
+              <span className="text-slate-400">TOURNAMENT ROOM:</span> <b className="text-cyber-blue mr-3">{lobbyId}</b>
+              <span className="text-slate-400">STATUS:</span> <b className="text-cyber-green uppercase">{tournamentMatchIndex < roomState.tournament_matches.length ? 'Matches In Progress' : 'Completed'}</b>
+            </div>
+            {tournamentMatchIndex < roomState.tournament_matches.length && (
+              <button
+                onClick={skipSimulation}
+                className="px-3 py-1 rounded bg-cyber-pink/20 border border-cyber-pink/40 text-cyber-pink text-[10px] hover:bg-cyber-pink/30 font-bold uppercase transition-all cursor-pointer"
+              >
+                ⏩ Skip Simulation
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch flex-1 min-h-0">
+            {/* Leaderboard Column */}
+            <div className="cyber-glass border border-white/10 rounded-2xl p-5 bg-black/40 flex flex-col min-h-0">
+              <h3 className="text-sm font-bold text-cyber-blue uppercase tracking-wider mb-4 pb-2 border-b border-white/5 shrink-0 flex items-center justify-between">
+                <span>🏆 Room Leaderboard</span>
+                <span className="text-[10px] text-slate-500 normal-case font-normal">Round Robin</span>
+              </h3>
+              <div className="overflow-y-auto flex-1 retro-scroll pr-1">
+                <table className="w-full text-left text-xs text-slate-300">
+                  <thead>
+                    <tr className="text-slate-500 border-b border-white/5 uppercase text-[9px] tracking-wider">
+                      <th className="py-2 pl-2">Rank</th>
+                      <th className="py-2">Card</th>
+                      <th className="py-2 text-center">W/L/D</th>
+                      <th className="py-2 text-right pr-2">Pts</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {getLocalLeaderboard().map((player, idx) => {
+                      const isWinner = tournamentMatchIndex >= roomState.tournament_matches.length && idx === 0;
+                      return (
+                        <tr key={idx} className={`border-b border-white/5 hover:bg-white/5 transition-all ${isWinner ? 'bg-cyber-green/5 border-cyber-green/30' : ''}`}>
+                          <td className="py-3 pl-2 font-bold text-cyber-purple flex items-center gap-1">
+                            {isWinner && <span>👑</span>}
+                            {idx + 1}
+                          </td>
+                          <td className="py-3 font-semibold text-slate-100 truncate max-w-[120px]">{player.card_name}</td>
+                          <td className="py-3 text-center text-slate-400">{player.wins}/{player.losses}/{player.draws}</td>
+                          <td className={`py-3 text-right pr-2 font-bold ${isWinner ? 'text-cyber-green' : 'text-cyber-blue'}`}>{player.points}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Active Simulation Arena / Winner Column */}
+            <div className="lg:col-span-2 cyber-glass border border-white/10 rounded-2xl p-5 bg-black/40 flex flex-col justify-between min-h-0 relative">
+              {tournamentMatchIndex < roomState.tournament_matches.length ? (
+                // ACTIVE FIGHT SIMULATION
+                <div className="flex-1 flex flex-col justify-between min-h-0 gap-4">
+                  {/* Duel Visuals */}
+                  <div className="flex flex-col items-center justify-center py-2 shrink-0">
+                    <span className="text-[10px] text-slate-500 uppercase tracking-widest block mb-2">
+                      Simulating Match {tournamentMatchIndex + 1} of {roomState.tournament_matches.length}
+                    </span>
+                    <div className="flex items-center gap-6 md:gap-12 justify-center w-full">
+                      {/* Player 1 */}
+                      <div className="flex flex-col items-center text-center w-28 md:w-36">
+                        <div className="w-16 h-16 md:w-20 md:h-20 rounded-xl bg-slate-950 border border-white/10 flex items-center justify-center overflow-hidden mb-2">
+                          {roomState.tournament_matches[tournamentMatchIndex].player1_image ? (
+                            <img
+                              src={roomState.tournament_matches[tournamentMatchIndex].player1_image}
+                              alt={roomState.tournament_matches[tournamentMatchIndex].player1_name}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <span className="text-xl">🔮</span>
+                          )}
+                        </div>
+                        <span className="text-xs font-bold text-white truncate w-full">
+                          {roomState.tournament_matches[tournamentMatchIndex].player1_name}
+                        </span>
+                      </div>
+
+                      {/* VS Divider */}
+                      <div className="flex flex-col items-center justify-center shrink-0">
+                        <div className="w-10 h-10 md:w-12 md:h-12 rounded-full border border-cyber-pink/55 flex items-center justify-center font-bold text-cyber-pink text-xs md:text-sm animate-pulse shadow-[0_0_15px_rgba(255,0,127,0.3)]">
+                          VS
+                        </div>
+                      </div>
+
+                      {/* Player 2 */}
+                      <div className="flex flex-col items-center text-center w-28 md:w-36">
+                        <div className="w-16 h-16 md:w-20 md:h-20 rounded-xl bg-slate-950 border border-white/10 flex items-center justify-center overflow-hidden mb-2">
+                          {roomState.tournament_matches[tournamentMatchIndex].player2_image ? (
+                            <img
+                              src={roomState.tournament_matches[tournamentMatchIndex].player2_image}
+                              alt={roomState.tournament_matches[tournamentMatchIndex].player2_name}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <span className="text-xl">🔮</span>
+                          )}
+                        </div>
+                        <span className="text-xs font-bold text-white truncate w-full">
+                          {roomState.tournament_matches[tournamentMatchIndex].player2_name}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Scrolling Combat Terminal Logs */}
+                  <div className="flex-1 min-h-0 bg-slate-950 border border-cyber-purple/30 rounded-xl p-4 font-mono text-[10px] text-[#39ff14] overflow-y-auto flex flex-col gap-1.5 retro-scroll select-text leading-relaxed">
+                    {tournamentMatchLogs.map((log, lIdx) => (
+                      <div key={lIdx} className="border-l border-[#39ff14]/20 pl-2">
+                        {log}
+                      </div>
+                    ))}
+                    {/* Dummy div to scroll to */}
+                    <div ref={(el) => { if (el) el.scrollIntoView({ behavior: 'smooth' }); }} />
+                  </div>
+                </div>
+              ) : (
+                // TOURNAMENT RESOLVED / CROWN CHAMPION
+                <div className="flex-1 flex flex-col justify-between items-center text-center py-6 min-h-0 gap-6">
+                  <div className="flex-1 flex flex-col items-center justify-center">
+                    <div className="text-6xl md:text-7xl mb-4 animate-bounce-slow filter drop-shadow-[0_0_20px_rgba(255,251,0,0.4)]">🏆</div>
+                    
+                    <h2 className="text-2xl md:text-3xl font-extrabold tracking-widest text-cyber-yellow font-mono uppercase mb-1 animate-pulse">
+                      CHAMPION CROWNED!
+                    </h2>
+                    
+                    <p className="text-slate-300 font-sans text-xs max-w-sm mb-6 leading-relaxed">
+                      The round-robin battles have concluded. All matches simulated successfully.
+                    </p>
+
+                    <div className="bg-slate-950/80 p-5 rounded-2xl border border-cyber-green/40 shadow-[0_0_20px_rgba(57,255,20,0.15)] max-w-sm w-full font-mono text-center">
+                      <span className="text-[10px] text-cyber-green block mb-1 tracking-widest font-extrabold uppercase">
+                        👑 TOURNAMENT WINNER 👑
+                      </span>
+                      <span className="text-lg md:text-xl font-black text-white uppercase block">
+                        {getLocalLeaderboard()[0]?.card_name}
+                      </span>
+                      <span className="text-[10px] text-slate-500 font-sans italic block mt-1">
+                        Creator ID: {roomState.tournament_winner_id}
+                      </span>
+                    </div>
+
+                    {/* Reward Notification for the local player */}
+                    {roomState.tournament_winner_id === clientId && (
+                      <div className="mt-4 bg-cyber-green/10 border border-cyber-green/30 px-6 py-3 rounded-xl max-w-sm w-full font-mono text-center shadow-[0_0_15px_rgba(57,255,20,0.1)]">
+                        <span className="text-cyber-green font-bold text-xs uppercase block animate-pulse">
+                          🎉 YOU WON THE TOURNAMENT! 🎉
+                        </span>
+                        <span className="text-white text-[10px] uppercase mt-1 block">
+                          Claimed: <b className="text-cyber-yellow">+150 Aether Dust</b> & <b className="text-cyber-blue">+2 Catalysts</b>
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="w-full max-w-sm shrink-0">
+                    {clientId === roomState.owner_id ? (
+                      <button
+                        onClick={() => {
+                          if (socket && socket.readyState === WebSocket.OPEN) {
+                            socket.send(JSON.stringify({
+                              action: "reset_tournament"
+                            }));
+                          }
+                        }}
+                        className="w-full py-3 rounded-xl bg-gradient-to-r from-cyber-purple to-cyber-blue text-black font-bold font-mono text-xs uppercase hover:brightness-110 active:scale-95 transition-all cursor-pointer shadow-[0_0_15px_rgba(157,78,221,0.3)] text-center"
+                      >
+                        Reset Lobby & Return
+                      </button>
+                    ) : (
+                      <div className="text-xs text-slate-500 italic bg-black/30 py-3 px-4 rounded-xl border border-white/5 w-full">
+                        Awaiting host to reset the lobby...
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ROOM CARD SELECTOR MODAL */}
+      {showRoomCardSelectorModal && (
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-4 backdrop-blur-md">
+          <div className="max-w-2xl w-full cyber-glass border border-white/20 p-6 rounded-2xl shadow-2xl relative flex flex-col max-h-[85vh]">
+            <button
+              onClick={() => setShowRoomCardSelectorModal(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white font-mono text-xs uppercase cursor-pointer"
+            >
+              [Close X]
+            </button>
+
+            <h3 className="text-lg font-bold font-mono uppercase tracking-wider mb-2 text-cyber-blue border-b border-white/5 pb-2">
+              Select Your Alchemical Champion
+            </h3>
+            <p className="text-xs text-slate-400 font-mono mb-4">
+              Select a card from your inventory to represent you in the multiplayer lobby and tournaments.
+            </p>
+
+            <div className="flex-1 overflow-y-auto retro-scroll pr-2 mb-4">
+              {cards.length === 0 ? (
+                <div className="text-center py-12 text-slate-500 font-mono italic text-xs">
+                  Your vault is empty! Go forge some cards from real world objects first.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {cards.map((myCard, idx) => (
+                    <div
+                      key={idx}
+                      className="bg-black/60 border border-white/10 rounded-xl p-3 flex justify-between items-center hover:border-cyber-blue/40 hover:bg-cyber-blue/5 transition-all group font-mono"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">{getElementStyles(myCard.element).symbol}</span>
+                        <div className="text-left">
+                          <p className="font-bold text-xs uppercase text-slate-200">{myCard.card_name}</p>
+                          <p className="text-[9px] text-slate-400">
+                            ATK: <b className="text-cyber-pink">{myCard.base_stats.attack}</b> |
+                            SPD: <b className="text-cyber-blue">{myCard.base_stats.speed}</b> |
+                            HP: <b className="text-cyber-purple">{myCard.base_stats.health}</b>
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          if (socket && socket.readyState === WebSocket.OPEN) {
+                            socket.send(JSON.stringify({
+                              action: "register",
+                              card: myCard
+                            }));
+                          }
+                          setSelectedCard(myCard);
+                          setShowRoomCardSelectorModal(false);
+                        }}
+                        className="px-3 py-1.5 rounded bg-cyber-blue text-black font-bold text-[10px] uppercase hover:brightness-110 cursor-pointer animate-pulse"
+                      >
+                        Summon
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 

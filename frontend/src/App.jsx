@@ -1227,33 +1227,36 @@ export default function App() {
                 </div>
               ) : (
                 // LIVE HTML5 VIDEO VIEWPORT
-                <div className="w-full h-full flex flex-col items-center justify-between relative">
-                  {/* Glowing camera border reticle */}
-                  <div className="absolute inset-4 border border-white/10 rounded-xl pointer-events-none z-10">
-                    <div className="absolute top-0 left-0 w-4 h-4 border-t border-l border-cyber-blue" />
-                    <div className="absolute top-0 right-0 w-4 h-4 border-t border-r border-cyber-blue" />
-                    <div className="absolute bottom-0 left-0 w-4 h-4 border-b border-l border-cyber-blue" />
-                    <div className="absolute bottom-0 right-0 w-4 h-4 border-b border-r border-cyber-blue" />
-                  </div>
+                <div className="flex flex-col items-center justify-center relative z-10 w-full py-4">
+                  {/* Viewfinder at 1.6x dimensions (w-[410px] h-[282px]) with absolute shutter overlay */}
+                  <div className="w-[410px] h-[282px] max-w-full flex flex-col items-center justify-center relative rounded-xl border border-cyber-blue/40 bg-black overflow-hidden shadow-[0_0_15px_rgba(0,240,255,0.2)]">
+                    {/* Glowing camera border reticle */}
+                    <div className="absolute inset-3 border border-white/10 rounded-lg pointer-events-none z-10">
+                      <div className="absolute top-0 left-0 w-3 h-3 border-t border-l border-cyber-blue" />
+                      <div className="absolute top-0 right-0 w-3 h-3 border-t border-r border-cyber-blue" />
+                      <div className="absolute bottom-0 left-0 w-3 h-3 border-b border-l border-cyber-blue" />
+                      <div className="absolute bottom-0 right-0 w-3 h-3 border-b border-r border-cyber-blue" />
+                    </div>
 
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    className="w-full h-full object-cover rounded-xl bg-black"
-                  />
-                  <canvas ref={canvasRef} className="hidden" />
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className="w-full h-full object-cover rounded-lg bg-black"
+                    />
+                    <canvas ref={canvasRef} className="hidden" />
 
-                  {/* Shutter capture controls */}
-                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20">
-                    <button
-                      onClick={captureFrameAndTransmute}
-                      disabled={isUploading}
-                      className="w-16 h-16 rounded-full bg-white/20 hover:bg-white/40 border-4 border-white flex items-center justify-center transition-all cursor-pointer shadow-[0_0_15px_rgba(255,255,255,0.4)] hover:scale-105 active:scale-95 disabled:opacity-40"
-                    >
-                      <div className="w-10 h-10 rounded-full bg-cyber-purple animate-pulse" />
-                    </button>
+                    {/* Shutter capture button overlay */}
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20">
+                      <button
+                        onClick={captureFrameAndTransmute}
+                        disabled={isUploading}
+                        className="w-14 h-14 rounded-full bg-white/20 hover:bg-white/40 border-4 border-white flex items-center justify-center transition-all cursor-pointer shadow-[0_0_15px_rgba(255,255,255,0.3)] hover:scale-105 active:scale-95 disabled:opacity-40"
+                      >
+                        <div className="w-8 h-8 rounded-full bg-cyber-purple animate-pulse" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1731,7 +1734,7 @@ export default function App() {
                   <img
                     src={resolveImageUrl(me)}
                     alt={me.card_name}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-contain"
                   />
                 ) : (
                   <AlchemicalPlaceholder element={me.element} className="border-none bg-transparent" />
@@ -1894,7 +1897,7 @@ export default function App() {
                   <img
                     src={resolveImageUrl(opponent)}
                     alt={opponent.card_name}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-contain"
                   />
                 ) : (
                   <AlchemicalPlaceholder element={opponent.element} className="border-none bg-transparent" />
@@ -3042,12 +3045,12 @@ function TradingCard({ card, onAction, actionLabel }) {
 
       {/* Card Visual & Name */}
       <div className="card-title-row my-2 relative z-10 flex flex-col gap-2">
-        <div className="card-img-frame w-full h-32 rounded-lg bg-black/70 flex items-center justify-center overflow-hidden border border-white/5 relative">
+        <div className="card-img-frame w-full h-44 rounded-lg bg-black/70 flex items-center justify-center overflow-hidden border border-white/5 relative">
           {resolveImageUrl(card) ? (
             <img
               src={resolveImageUrl(card)}
               alt={card.card_name}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
             />
           ) : (
             <AlchemicalPlaceholder element={card.element} className="border-none bg-transparent" />

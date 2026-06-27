@@ -250,9 +250,12 @@ async def transmute_image_to_card(image_bytes: bytes, filename: str, mime_type: 
             "Provide a brief, creative uniqueness_reason.\n"
             "5. Sub-Element: Assign a sub-element based on the object's specifics. One of: Plasma, Frost, Quartz, Vapor, Aether.\n"
             "6. Rarity: Assign a rarity tier based on the uniqueness score. Common (<40), Rare (40-69), Epic (70-89), Legendary (90+).\n"
-            "7. Imagen Prompt: Write a detailed alchemical/fantasy/cyberpunk art generation prompt (1-2 sentences) "
-            "describing a stylized representation of the object as a magical trading card creature/relic, including a vibrant matching background. "
-            "Keep the description creative, artistic, and clear for a text-to-image generator (e.g., 'A mystical glowing blue energy drink can pulsing with lightning sparks, floating in a cyberpunk neo-Tokyo street, anime fantasy trading card style').\n"
+            "7. Imagen Prompt: Write a detailed, highly specific art generation prompt representing the object. "
+            "To ensure the generated artwork is extremely faithful to the captured image, you MUST describe the main subject/object in the center "
+            "almost exactly as it appears in the photo, keeping its design, shape, colors, and structure highly recognizable. "
+            "Apply a creative 'AI twist' to this central object by adding subtle futuristic or magical elements onto it (e.g. glowing energy veins, "
+            "holographic highlights, or soft alchemical sparks), and replace the background with a stylized, dynamic alchemical or cyberpunk backdrop, "
+            "so the final image is a recognizable but magical version of the captured object.\n"
             "8. Output format: You must return a single JSON object matching the requested schema. No conversational wrapper."
         )
 

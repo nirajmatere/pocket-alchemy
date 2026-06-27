@@ -419,6 +419,207 @@
   animation: battle-log-appear-kf 2.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+/* --- Enhanced Battle Animations --- */
+
+/* Screen Shake for Heavy Hits */
+@keyframes screen-shake-kf {
+  0%, 100% { transform: translate(0, 0); }
+  10% { transform: translate(-4px, 2px); }
+  20% { transform: translate(5px, -3px); }
+  30% { transform: translate(-3px, -1px); }
+  40% { transform: translate(2px, 4px); }
+  50% { transform: translate(-5px, -2px); }
+  60% { transform: translate(3px, 1px); }
+  70% { transform: translate(-2px, -4px); }
+  80% { transform: translate(4px, 2px); }
+  90% { transform: translate(-1px, 3px); }
+}
+.animate-screen-shake {
+  animation: screen-shake-kf 0.4s ease-out;
+}
+
+/* Health Bar White Flash on Damage */
+@keyframes health-bar-flash-kf {
+  0% { background-color: rgba(255, 255, 255, 0.9); box-shadow: 0 0 12px rgba(255,255,255,0.6); }
+  100% { background-color: transparent; box-shadow: none; }
+}
+.animate-health-bar-flash {
+  animation: health-bar-flash-kf 0.5s ease-out;
+}
+
+/* Card Art Damage Red Overlay */
+@keyframes damage-overlay-kf {
+  0% { background: rgba(239, 68, 68, 0.5); opacity: 1; }
+  100% { background: rgba(239, 68, 68, 0); opacity: 0; }
+}
+.animate-damage-overlay {
+  animation: damage-overlay-kf 0.5s ease-out;
+}
+
+/* Card Art Heal Green Overlay */
+@keyframes heal-overlay-kf {
+  0% { background: rgba(74, 222, 128, 0.4); opacity: 1; }
+  100% { background: rgba(74, 222, 128, 0); opacity: 0; }
+}
+.animate-heal-overlay {
+  animation: heal-overlay-kf 0.6s ease-out;
+}
+
+/* Ability Cast Full-Screen Elemental Flash */
+@keyframes ability-flash-kf {
+  0% { opacity: 0; }
+  15% { opacity: 0.7; }
+  30% { opacity: 0.9; }
+  50% { opacity: 0.3; }
+  70% { opacity: 0.6; }
+  100% { opacity: 0; }
+}
+.animate-ability-flash {
+  animation: ability-flash-kf 0.8s ease-out;
+}
+
+/* Expanding Ring Ripple from Ability Cast */
+@keyframes expanding-ring-kf {
+  0% {
+    transform: scale(0.3);
+    border-width: 3px;
+    opacity: 1;
+  }
+  100% {
+    transform: scale(2.5);
+    border-width: 0px;
+    opacity: 0;
+  }
+}
+.animate-expanding-ring {
+  animation: expanding-ring-kf 1s ease-out forwards;
+}
+
+/* Card Edge Glow during Ability Cast (uses --glow-color CSS variable) */
+@keyframes ability-glow-kf {
+  0%, 100% { box-shadow: 0 0 15px var(--glow-color, rgba(157,78,221,0.4)); }
+  50% { box-shadow: 0 0 45px var(--glow-color, rgba(157,78,221,0.9)), 0 0 70px var(--glow-color, rgba(157,78,221,0.4)); }
+}
+.animate-ability-glow {
+  animation: ability-glow-kf 1s ease-in-out;
+}
+
+/* Victory Confetti Fall */
+@keyframes confetti-fall-kf {
+  0% {
+    transform: translateY(-10px) rotate(0deg) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(100vh) rotate(720deg) scale(0.2);
+    opacity: 0;
+  }
+}
+.animate-confetti {
+  animation: confetti-fall-kf var(--confetti-duration, 3s) var(--confetti-delay, 0s) ease-in forwards;
+}
+
+/* Defeat Dark Particles */
+@keyframes defeat-particle-kf {
+  0% {
+    transform: translateY(-10px) translateX(0) rotate(0deg);
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateY(100vh) translateX(var(--drift, 30px)) rotate(180deg);
+    opacity: 0;
+  }
+}
+.animate-defeat-particle {
+  animation: defeat-particle-kf var(--particle-duration, 4s) var(--particle-delay, 0s) ease-in forwards;
+}
+
+/* Round Intro Announcement */
+@keyframes round-intro-kf {
+  0% {
+    transform: scale(2.5);
+    opacity: 0;
+    filter: blur(8px);
+  }
+  15% {
+    transform: scale(1);
+    opacity: 1;
+    filter: blur(0);
+  }
+  75% {
+    transform: scale(1);
+    opacity: 1;
+    filter: blur(0);
+  }
+  100% {
+    transform: scale(0.8);
+    opacity: 0;
+    filter: blur(4px);
+  }
+}
+.animate-round-intro {
+  animation: round-intro-kf 1.5s ease-out forwards;
+}
+
+/* Stance Button Pulse on Change */
+@keyframes stance-change-kf {
+  0% { box-shadow: 0 0 0px currentColor; transform: scale(1); }
+  50% { box-shadow: 0 0 20px currentColor; transform: scale(1.05); }
+  100% { box-shadow: 0 0 0px currentColor; transform: scale(1); }
+}
+.animate-stance-change {
+  animation: stance-change-kf 0.5s ease-out;
+}
+
+/* Critical Hit Heavy Damage Pop-in */
+@keyframes critical-pop-kf {
+  0% { transform: scale(0.3) rotate(-5deg); opacity: 0; }
+  30% { transform: scale(1.6) rotate(2deg); opacity: 1; }
+  60% { transform: scale(1.1) rotate(-1deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+.damage-popup-critical {
+  animation: floating-damage 1.4s ease-out forwards, critical-pop-kf 0.4s ease-out;
+}
+
+/* Tournament VS Expanding Ring */
+@keyframes vs-pulse-ring-kf {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 0, 127, 0.4);
+    transform: scale(1);
+  }
+  70% {
+    box-shadow: 0 0 0 18px rgba(255, 0, 127, 0);
+    transform: scale(1.15);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 0, 127, 0);
+    transform: scale(1);
+  }
+}
+.animate-vs-pulse {
+  animation: vs-pulse-ring-kf 2s ease-out infinite;
+}
+
+/* Tournament Health Bar Pulse */
+@keyframes tournament-hp-pulse-kf {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.3); }
+}
+.animate-tournament-hp {
+  animation: tournament-hp-pulse-kf 1.5s ease-in-out infinite;
+}
+
+/* Shield Shatter on Break */
+@keyframes shield-shatter-kf {
+  0% { opacity: 1; transform: scale(1); border-color: rgba(0,240,255,0.6); }
+  50% { opacity: 0.6; transform: scale(1.15); border-color: rgba(0,240,255,0.3); }
+  100% { opacity: 0; transform: scale(1.3); border-color: transparent; }
+}
+.animate-shield-shatter {
+  animation: shield-shatter-kf 0.5s ease-out forwards;
+}
+
 .alchemical-card {
   width: 100%;
   max-width: 285px;

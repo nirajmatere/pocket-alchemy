@@ -152,6 +152,18 @@ export default function App() {
   const [oppAnimClass, setOppAnimClass] = useState('');
   const [popups, setPopups] = useState([]);
 
+  // Enhanced Battle Animation States
+  const [screenShake, setScreenShake] = useState(false);
+  const [abilityFlash, setAbilityFlash] = useState(null); // { element, caster } or null
+  const [healthFlash, setHealthFlash] = useState({ me: false, opp: false });
+  const [cardOverlay, setCardOverlay] = useState({ me: null, opp: null }); // 'damage' | 'heal' | null
+  const [roundIntro, setRoundIntro] = useState(null); // { round } or null
+  const [confetti, setConfetti] = useState(false);
+  const [defeatParticles, setDefeatParticles] = useState(false);
+  const [stancePulse, setStancePulse] = useState(null); // stance id string
+  const [mascotAnimation, setMascotAnimation] = useState('animate-mascot-referee');
+  const [shieldShatter, setShieldShatter] = useState({ me: false, opp: false });
+
   // Stances, advice, global quest progression states
   const [selectedStance, setSelectedStance] = useState('focused'); // 'focused' | 'aggressive' | 'defensive'
   const [hintText, setHintText] = useState(null);
@@ -212,6 +224,42 @@ export default function App() {
   const [tournamentMatchesCompleted, setTournamentMatchesCompleted] = useState([]);
   const [tournamentRunningLocal, setTournamentRunningLocal] = useState(false);
   const [showRoomCardSelectorModal, setShowRoomCardSelectorModal] = useState(false);
+
+  // Element-to-color mapping for damage popups
+  const getElementDamageColor = (element) => {
+    if (!element) return 'text-red-500 drop-shadow-[0_0_12px_rgba(239,68,68,0.8)]';
+    switch (element) {
+      case 'Fire': return 'text-orange-500 drop-shadow-[0_0_15px_rgba(249,115,22,0.9)]';
+      case 'Water': return 'text-cyan-400 drop-shadow-[0_0_15px_rgba(34,211,238,0.9)]';
+      case 'Lightning': return 'text-fuchsia-400 drop-shadow-[0_0_15px_rgba(232,121,249,0.9)]';
+      case 'Earth': return 'text-emerald-400 drop-shadow-[0_0_15px_rgba(52,211,153,0.9)]';
+      default: return 'text-amber-400 drop-shadow-[0_0_12px_rgba(251,191,36,0.9)]';
+    }
+  };
+
+  const getElementGlowColor = (element) => {
+    if (!element) return 'rgba(157,78,221,0.6)';
+    switch (element) {
+      case 'Fire': return 'rgba(249,115,22,0.6)';
+      case 'Water': return 'rgba(34,211,238,0.6)';
+      case 'Lightning': return 'rgba(232,121,249,0.6)';
+      case 'Earth': return 'rgba(52,211,153,0.6)';
+      default: return 'rgba(251,191,36,0.6)';
+    }
+  };
+
+  const deriveMascotMood = (bs, myFighter, oppFighter) => {
+    if (!bs || !myFighter) return 'animate-mascot-referee';
+    if (bs.game_over) {
+      const isWin = (bs.winner === 'Player 1' && bs.player1_id === clientId) ||
+                    (bs.winner === 'Player 2' && bs.player2_id === clientId) ||
+                    (bs.winner === `Player ${playerNum}`);
+      return isWin ? 'animate-mascot-happy' : 'animate-mascot-sad';
+    }
+    if (oppFighter && oppFighter.current_health < oppFighter.max_health * 0.25) return 'animate-mascot-happy';
+    if (myFighter.current_health < myFighter.max_health * 0.25) return 'animate-mascot-sad';
+    return 'animate-mascot-dance';
+  };
 
   const [animatedLogQueue, setAnimatedLogQueue] = useState([]);
   const [displayedLog, setDisplayedLog] = useState(null);
@@ -322,9 +370,9 @@ export default function App() {
 
   const prevBattleStateRef = useRef(null);
 
-  const spawnPopup = (text, type, target) => {
+  const spawnPopup = (text, type, target, element = null, isHeavy = false) => {
     const id = Math.random().toString(36).substring(2, 9);
-    setPopups(prev => [...prev, { id, text, type, target }]);
+    setPopups(prev => [...prev, { id, text, type, target, element, isHeavy }]);
     setTimeout(() => {
       setPopups(prev => prev.filter(p => p.id !== id));
     }, 1200);
@@ -336,6 +384,14 @@ export default function App() {
       prevBattleStateRef.current = null;
       timerId = setTimeout(() => {
         setPopups([]);
+        setScreenShake(false);
+        setAbilityFlash(null);
+        setRoundIntro(null);
+        setConfetti(false);
+        setDefeatParticles(false);
+        setHealthFlash({ me: false, opp: false });
+        setCardOverlay({ me: null, opp: null });
+        setShieldShatter({ me: false, opp: false });
       }, 0);
     } else {
       const prev = prevBattleStateRef.current;
@@ -344,6 +400,24 @@ export default function App() {
       if (prev) {
         const newRound = battleState.round_number !== prev.round_number;
         const gameOverState = battleState.game_over && !prev.game_over;
+
+        // --- ROUND TRANSITION ---
+        if (newRound && !gameOverState) {
+          setRoundIntro({ round: battleState.round_number });
+          timerId = setTimeout(() => setRoundIntro(null), 1500);
+        }
+
+        // --- GAME OVER EFFECTS ---
+        if (gameOverState) {
+          const isP1User = !roomState || !roomState.is_pvp || battleState.player1_id === clientId;
+          const winnerIsUser = (battleState.winner === 'Player 1' && isP1User) ||
+                                (battleState.winner === 'Player 2' && !isP1User);
+          if (winnerIsUser) {
+            setConfetti(true); // eslint-disable-line react-hooks/set-state-in-effect
+          } else {
+            setDefeatParticles(true); // eslint-disable-line react-hooks/set-state-in-effect
+          }
+        }
 
         if (newRound || gameOverState) {
           timerId = setTimeout(() => {
@@ -373,33 +447,99 @@ export default function App() {
 
             if (!prevMe || !prevOpp || !currMe || !currOpp) return;
 
-            // Check damage / heal / shield for Me
-            const meHpDiff = currMe.current_health - prevMe.current_health;
-            if (meHpDiff < 0) {
-              setOppAnimClass('animate-strike-left');
-              setTimeout(() => {
-                setMyAnimClass('animate-damage-shake');
-                spawnPopup(`-${Math.abs(meHpDiff)}`, 'damage', 'me');
-              }, 150);
-            } else if (meHpDiff > 0) {
-              spawnPopup(`+${meHpDiff}`, 'heal', 'me');
-            } else if (currMe.shield_active && !prevMe.shield_active) {
-              spawnPopup('SHIELD', 'shield', 'me');
+            // --- ABILITY CAST DETECTION (cooldown 0→>0) ---
+            if ((prevMe.ability_cooldown || 0) === 0 && (currMe.ability_cooldown || 0) > 0) {
+              setAbilityFlash({ element: currMe.element, caster: 'me' });
+              setMyAnimClass('animate-ability-glow');
+              setTimeout(() => { setAbilityFlash(null); setMyAnimClass(''); }, 1000);
+            }
+            if ((prevOpp.ability_cooldown || 0) === 0 && (currOpp.ability_cooldown || 0) > 0) {
+              setAbilityFlash({ element: currOpp.element, caster: 'opp' });
+              setOppAnimClass('animate-ability-glow');
+              setTimeout(() => { setAbilityFlash(null); setOppAnimClass(''); }, 1000);
             }
 
-            // Check damage / heal / shield for Opponent
+            // --- STANCE CHANGE DETECTION ---
+            if (prevMe.stance !== currMe.stance) {
+              setStancePulse(currMe.stance);
+              setTimeout(() => setStancePulse(null), 500);
+            }
+
+            // --- SHIELD BREAK DETECTION ---
+            if (prevMe.shield_active && !currMe.shield_active) {
+              setShieldShatter(prev => ({ ...prev, me: true }));
+              setTimeout(() => setShieldShatter(prev => ({ ...prev, me: false })), 500);
+            }
+            if (prevOpp.shield_active && !currOpp.shield_active) {
+              setShieldShatter(prev => ({ ...prev, opp: true }));
+              setTimeout(() => setShieldShatter(prev => ({ ...prev, opp: false })), 500);
+            }
+
+            // Helper: update card art overlay
+            const updateCardOverlay = (diff, target) => {
+              if (diff < 0) {
+                setCardOverlay(prev => ({ ...prev, [target]: 'damage' }));
+                setTimeout(() => setCardOverlay(prev => ({ ...prev, [target]: null })), 500);
+              } else if (diff > 0) {
+                setCardOverlay(prev => ({ ...prev, [target]: 'heal' }));
+                setTimeout(() => setCardOverlay(prev => ({ ...prev, [target]: null })), 600);
+              }
+            };
+
+            // --- MY CARD EFFECTS ---
+            const meHpDiff = currMe.current_health - prevMe.current_health;
+            const meDamagePct = prevMe.max_health > 0 ? Math.abs(meHpDiff) / prevMe.max_health : 0;
+
+            if (meHpDiff < 0) {
+              const absDmg = Math.abs(meHpDiff);
+              const isHeavy = meDamagePct > 0.15;
+
+              setOppAnimClass('animate-strike-left');
+              if (isHeavy) setScreenShake(true);
+
+              setTimeout(() => {
+                setMyAnimClass('animate-damage-shake');
+                setHealthFlash(prevFlash => ({ ...prevFlash, me: true }));
+                updateCardOverlay(meHpDiff, 'me');
+                spawnPopup(`-${absDmg}`, 'damage', 'me', currOpp.element, isHeavy);
+                if (isHeavy) setTimeout(() => setScreenShake(false), 400);
+                setTimeout(() => setHealthFlash(prevFlash => ({ ...prevFlash, me: false })), 500);
+              }, 150);
+            } else if (meHpDiff > 0) {
+              updateCardOverlay(meHpDiff, 'me');
+              spawnPopup(`+${meHpDiff}`, 'heal', 'me', currMe.element);
+            } else if (currMe.shield_active && !prevMe.shield_active) {
+              spawnPopup('SHIELD', 'shield', 'me', currMe.element);
+            }
+
+            // --- OPPONENT CARD EFFECTS ---
             const oppHpDiff = currOpp.current_health - prevOpp.current_health;
+            const oppDamagePct = prevOpp.max_health > 0 ? Math.abs(oppHpDiff) / prevOpp.max_health : 0;
+
             if (oppHpDiff < 0) {
+              const absDmg = Math.abs(oppHpDiff);
+              const isHeavy = oppDamagePct > 0.15;
+
               setMyAnimClass('animate-strike-right');
+              if (isHeavy) setScreenShake(true);
+
               setTimeout(() => {
                 setOppAnimClass('animate-damage-shake');
-                spawnPopup(`-${Math.abs(oppHpDiff)}`, 'damage', 'opp');
+                setHealthFlash(prevFlash => ({ ...prevFlash, opp: true }));
+                updateCardOverlay(oppHpDiff, 'opp');
+                spawnPopup(`-${absDmg}`, 'damage', 'opp', currMe.element, isHeavy);
+                if (isHeavy) setTimeout(() => setScreenShake(false), 400);
+                setTimeout(() => setHealthFlash(prevFlash => ({ ...prevFlash, opp: false })), 500);
               }, 150);
             } else if (oppHpDiff > 0) {
-              spawnPopup(`+${oppHpDiff}`, 'heal', 'opp');
+              updateCardOverlay(oppHpDiff, 'opp');
+              spawnPopup(`+${oppHpDiff}`, 'heal', 'opp', currOpp.element);
             } else if (currOpp.shield_active && !prevOpp.shield_active) {
-              spawnPopup('SHIELD', 'shield', 'opp');
+              spawnPopup('SHIELD', 'shield', 'opp', currOpp.element);
             }
+
+            // --- UPDATE MASCOT MOOD ---
+            setMascotAnimation(deriveMascotMood(battleState, currMe, currOpp));
 
             setTimeout(() => {
               setMyAnimClass('');
@@ -890,6 +1030,20 @@ export default function App() {
     setJoinRoomCode('');
     setRoomState(null);
     setIsSpectatingActive(false);
+    // Reset all animation states
+    setScreenShake(false);
+    setAbilityFlash(null);
+    setHealthFlash({ me: false, opp: false });
+    setCardOverlay({ me: null, opp: null });
+    setRoundIntro(null);
+    setConfetti(false);
+    setDefeatParticles(false);
+    setStancePulse(null);
+    setMascotAnimation('animate-mascot-referee');
+    setShieldShatter({ me: false, opp: false });
+    setMyAnimClass('');
+    setOppAnimClass('');
+    setPopups([]);
     setActiveView('inventory');
     fetchInventory();
     fetchDashboardData();
@@ -1660,16 +1814,47 @@ export default function App() {
 
       {/* VIEW 3: BATTLE ARENA */}
       {activeView === 'battle' && battleState && me && (
-        <div className="flex-1 flex flex-col gap-3 justify-between overflow-hidden relative">
+        <div className={`flex-1 flex flex-col gap-3 justify-between overflow-hidden relative ${screenShake ? 'animate-screen-shake' : ''}`}>
+
+          {/* Ability Cast Screen Flash Overlay */}
+          {abilityFlash && (
+            <div
+              className="absolute inset-0 z-35 pointer-events-none animate-ability-flash rounded-xl"
+              style={{
+                background: `radial-gradient(circle at center, ${getElementGlowColor(abilityFlash.element)}, transparent 70%)`
+              }}
+            />
+          )}
+
+          {/* Round Intro Announcement Overlay */}
+          {roundIntro && (
+            <div className="absolute inset-0 z-45 pointer-events-none flex items-center justify-center">
+              <div className="animate-round-intro text-center">
+                <span className="text-[10px] font-mono text-cyber-blue font-extrabold uppercase tracking-widest block mb-2">
+                  ARENA COMBAT
+                </span>
+                <span className="text-5xl md:text-7xl font-black font-mono text-white tracking-[0.3em] drop-shadow-[0_0_30px_rgba(0,240,255,0.8)]">
+                  ROUND {roundIntro.round}
+                </span>
+              </div>
+            </div>
+          )}
 
           {/* Sequential Animated Battle Log Overlay */}
           {displayedLog && (
             <div className="absolute inset-x-4 top-1/3 z-40 pointer-events-none flex justify-center items-center">
               <div className="animate-log-overlay text-center px-6 py-4 bg-black/90 border-2 border-cyber-green rounded-2xl shadow-[0_0_25px_rgba(57,255,20,0.4)] backdrop-blur-md max-w-lg">
                 <span className="text-[10px] font-mono text-cyber-green font-extrabold uppercase tracking-widest block mb-1">
-                  ⚡ COMBAT ANALYSIS ⚡
+                  COMBAT LOG
                 </span>
-                <p className="font-mono text-xs md:text-sm font-bold text-white tracking-wide uppercase drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
+                <p className={`font-mono text-xs md:text-sm font-bold tracking-wide uppercase drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] leading-relaxed ${
+                  displayedLog.includes('⚔️') || displayedLog.includes('💥') ? 'text-red-300' :
+                  displayedLog.includes('✨') ? 'text-fuchsia-300' :
+                  displayedLog.includes('🛡️') ? 'text-cyan-300' :
+                  displayedLog.includes('❤️') || displayedLog.includes('💪') || displayedLog.includes('⚡') ? 'text-green-300' :
+                  displayedLog.includes('🏆') ? 'text-yellow-300' :
+                  'text-white'
+                }`}>
                   {displayedLog}
                 </p>
               </div>
@@ -1701,7 +1886,10 @@ export default function App() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-stretch flex-1 min-h-0 overflow-y-auto md:overflow-hidden">
 
             {/* COLUMN 1: Player Card Details */}
-            <div className={`cyber-glass border border-white/10 rounded-xl p-4 flex flex-col justify-between relative overflow-hidden transition-all duration-300 ${myAnimClass}`}>
+            <div
+              className={`cyber-glass border border-white/10 rounded-xl p-4 flex flex-col justify-between relative overflow-hidden transition-all duration-300 ${myAnimClass}`}
+              style={myAnimClass === 'animate-ability-glow' ? { '--glow-color': getElementGlowColor(me.element) } : {}}
+            >
               <div className="flex justify-between items-center mb-2 text-xs text-cyber-purple font-mono uppercase tracking-wider">
                 <span>{isSpectator ? "Fighter 1" : "Player (You)"}</span>
                 <span className="px-2 py-0.5 rounded bg-cyber-purple/10 border border-cyber-purple/30 text-cyber-purple text-[10px] font-bold">
@@ -1714,22 +1902,30 @@ export default function App() {
                 {popups.filter(p => p.target === 'me').map(p => (
                   <span
                     key={p.id}
-                    className={`damage-popup absolute text-4xl font-extrabold font-mono tracking-wider ${p.type === 'damage' ? 'text-red-500 drop-shadow-[0_0_12px_rgba(239,68,68,0.8)]' :
-                        p.type === 'heal' ? 'text-green-400 drop-shadow-[0_0_12px_rgba(74,222,128,0.8)]' :
-                          'text-cyber-blue drop-shadow-[0_0_12px_rgba(0,240,255,0.8)]'
-                      }`}
+                    className={`damage-popup absolute font-extrabold font-mono tracking-wider ${p.isHeavy ? 'damage-popup-critical text-5xl' : 'text-4xl'} ${
+                      p.type === 'damage' ? getElementDamageColor(p.element) :
+                      p.type === 'heal' ? 'text-green-400 drop-shadow-[0_0_12px_rgba(74,222,128,0.8)]' :
+                      'text-cyber-blue drop-shadow-[0_0_12px_rgba(0,240,255,0.8)]'
+                    }`}
                   >
                     {p.text}
                   </span>
                 ))}
               </div>
 
-              {me.shield_active && (
-                <div className="absolute inset-0 border-2 border-cyber-blue animate-pulse rounded-xl pointer-events-none z-10" />
+              {/* Shield Active / Shatter Overlay */}
+              {me.shield_active ? (
+                <div className="absolute inset-0 border-2 border-cyber-blue rounded-xl pointer-events-none z-10" style={{ animation: 'pulse-neon 1.5s infinite' }} />
+              ) : shieldShatter.me && (
+                <div className="absolute inset-0 border-2 border-cyber-blue/50 rounded-xl pointer-events-none z-10 animate-shield-shatter" />
               )}
 
               {/* Card Art Image Frame */}
               <div className="w-full h-44 rounded-lg bg-black/60 flex items-center justify-center overflow-hidden border border-white/5 relative mb-3">
+                {/* Damage/Heal overlay on card art */}
+                {cardOverlay.me && (
+                  <div className={`absolute inset-0 z-20 pointer-events-none rounded-lg ${cardOverlay.me === 'damage' ? 'animate-damage-overlay' : 'animate-heal-overlay'}`} />
+                )}
                 {resolveImageUrl(me) ? (
                   <img
                     src={resolveImageUrl(me)}
@@ -1751,11 +1947,14 @@ export default function App() {
                   <span>HEALTH POOL</span>
                   <span className="font-bold text-white">{me.current_health}/{me.max_health} HP</span>
                 </div>
-                <div className="w-full bg-slate-950/80 h-3 rounded-full overflow-hidden border border-white/5 p-[2px]">
+                <div className="w-full bg-slate-950/80 h-3 rounded-full overflow-hidden border border-white/5 p-[2px] relative">
                   <div
                     style={{ width: `${(me.current_health / me.max_health) * 100}%` }}
                     className="h-full rounded-full bg-gradient-to-r from-cyber-purple to-cyber-blue transition-all duration-500 shadow-[0_0_8px_#9d4edd]"
                   />
+                  {healthFlash.me && (
+                    <div className="absolute inset-0 rounded-full animate-health-bar-flash z-10 pointer-events-none" />
+                  )}
                 </div>
               </div>
 
@@ -1776,7 +1975,7 @@ export default function App() {
 
               {/* Referee Mascot */}
               <div className="flex items-start gap-3 bg-black/60 border border-white/10 p-3 rounded-xl relative shadow-[inset_0_0_10px_rgba(255,255,255,0.05)]">
-                <div className="w-12 h-12 rounded-lg bg-cyber-purple/20 border border-cyber-purple/40 flex items-center justify-center text-2xl shrink-0 animate-mascot-referee overflow-hidden">
+                <div className={`w-12 h-12 rounded-lg bg-cyber-purple/20 border border-cyber-purple/40 flex items-center justify-center text-2xl shrink-0 overflow-hidden ${mascotAnimation}`}>
                   <img
                     src="/mascot.png"
                     onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }}
@@ -1864,7 +2063,10 @@ export default function App() {
             </div>
 
             {/* COLUMN 3: Opponent Card Details */}
-            <div className={`cyber-glass border border-white/10 rounded-xl p-4 flex flex-col justify-between relative overflow-hidden transition-all duration-300 ${oppAnimClass}`}>
+            <div
+              className={`cyber-glass border border-white/10 rounded-xl p-4 flex flex-col justify-between relative overflow-hidden transition-all duration-300 ${oppAnimClass}`}
+              style={oppAnimClass === 'animate-ability-glow' ? { '--glow-color': getElementGlowColor(opponent.element) } : {}}
+            >
               <div className="flex justify-between items-center mb-2 text-xs text-red-400 font-mono uppercase tracking-wider">
                 <span>{isSpectator ? "Fighter 2" : "Opponent"}</span>
                 <span className="px-2 py-0.5 rounded bg-red-500/10 border border-red-500/30 text-red-400 text-[10px] font-bold">
@@ -1877,22 +2079,30 @@ export default function App() {
                 {popups.filter(p => p.target === 'opp').map(p => (
                   <span
                     key={p.id}
-                    className={`damage-popup absolute text-4xl font-extrabold font-mono tracking-wider ${p.type === 'damage' ? 'text-red-500 drop-shadow-[0_0_12px_rgba(239,68,68,0.8)]' :
-                        p.type === 'heal' ? 'text-green-400 drop-shadow-[0_0_12px_rgba(74,222,128,0.8)]' :
-                          'text-cyber-blue drop-shadow-[0_0_12px_rgba(0,240,255,0.8)]'
-                      }`}
+                    className={`damage-popup absolute font-extrabold font-mono tracking-wider ${p.isHeavy ? 'damage-popup-critical text-5xl' : 'text-4xl'} ${
+                      p.type === 'damage' ? getElementDamageColor(p.element) :
+                      p.type === 'heal' ? 'text-green-400 drop-shadow-[0_0_12px_rgba(74,222,128,0.8)]' :
+                      'text-cyber-blue drop-shadow-[0_0_12px_rgba(0,240,255,0.8)]'
+                    }`}
                   >
                     {p.text}
                   </span>
                 ))}
               </div>
 
-              {opponent.shield_active && (
-                <div className="absolute inset-0 border-2 border-red-500 animate-pulse rounded-xl pointer-events-none z-10" />
+              {/* Shield Active / Shatter Overlay */}
+              {opponent.shield_active ? (
+                <div className="absolute inset-0 border-2 border-red-500 rounded-xl pointer-events-none z-10" style={{ animation: 'pulse-neon 1.5s infinite' }} />
+              ) : shieldShatter.opp && (
+                <div className="absolute inset-0 border-2 border-red-500/50 rounded-xl pointer-events-none z-10 animate-shield-shatter" />
               )}
 
               {/* Card Art Image Frame */}
               <div className="w-full h-44 rounded-lg bg-black/60 flex items-center justify-center overflow-hidden border border-white/5 relative mb-3">
+                {/* Damage/Heal overlay on card art */}
+                {cardOverlay.opp && (
+                  <div className={`absolute inset-0 z-20 pointer-events-none rounded-lg ${cardOverlay.opp === 'damage' ? 'animate-damage-overlay' : 'animate-heal-overlay'}`} />
+                )}
                 {resolveImageUrl(opponent) ? (
                   <img
                     src={resolveImageUrl(opponent)}
@@ -1914,11 +2124,14 @@ export default function App() {
                   <span>HEALTH POOL</span>
                   <span className="font-bold text-white">{opponent.current_health}/{opponent.max_health} HP</span>
                 </div>
-                <div className="w-full bg-slate-950/80 h-3 rounded-full overflow-hidden border border-white/5 p-[2px]">
+                <div className="w-full bg-slate-950/80 h-3 rounded-full overflow-hidden border border-white/5 p-[2px] relative">
                   <div
                     style={{ width: `${(opponent.current_health / opponent.max_health) * 100}%` }}
                     className="h-full rounded-full bg-gradient-to-r from-red-500 to-amber-500 transition-all duration-500 shadow-[0_0_8px_#ef4444]"
                   />
+                  {healthFlash.opp && (
+                    <div className="absolute inset-0 rounded-full animate-health-bar-flash z-10 pointer-events-none" />
+                  )}
                 </div>
               </div>
 
@@ -1957,7 +2170,7 @@ export default function App() {
                       disabled={battleState.game_over || actionLocked}
                       onClick={() => setSelectedStance(st.id)}
                       className={`py-2 px-1 rounded-lg border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 ${selectedStance === st.id ? st.color : st.inactive
-                        }`}
+                        } ${selectedStance === st.id && stancePulse === st.id ? 'animate-stance-change' : ''}`}
                     >
                       <span className="text-[11px] font-bold uppercase">{st.name}</span>
                       <span className="text-[7px] text-slate-500 font-semibold">{st.desc}</span>
@@ -1979,9 +2192,11 @@ export default function App() {
                   <button
                     disabled={battleState.game_over || actionLocked || me.ability_cooldown > 0}
                     onClick={() => sendBattleAction('ability')}
-                    className={`py-2.5 rounded-lg font-bold font-mono text-xs uppercase border disabled:opacity-30 cursor-pointer text-center ${me.ability_cooldown > 0
+                    className={`py-2.5 rounded-lg font-bold font-mono text-xs uppercase border disabled:opacity-30 cursor-pointer text-center transition-all duration-300 ${me.ability_cooldown > 0
                         ? 'bg-slate-900 border-white/5 text-slate-500'
-                        : 'bg-gradient-to-r from-cyber-purple to-cyber-blue text-black border-cyber-purple'
+                        : me.ability_cooldown === 0 && !battleState.game_over && !actionLocked
+                          ? 'bg-gradient-to-r from-cyber-purple to-cyber-blue text-black border-cyber-purple shadow-[0_0_18px_rgba(157,78,221,0.6)] animate-pulse'
+                          : 'bg-gradient-to-r from-cyber-purple to-cyber-blue text-black border-cyber-purple'
                       }`}
                   >
                     {actionLocked ? 'Locked' : `✨ Ability ${me.ability_cooldown > 0 ? `(${me.ability_cooldown})` : ''}`}
@@ -2031,7 +2246,7 @@ export default function App() {
           {/* Battle End Modal Overlay */}
           {battleState.game_over && (
             <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-4 backdrop-blur-md">
-              <div className="max-w-md w-full cyber-glass border border-white/20 p-6 rounded-2xl text-center shadow-2xl relative">
+              <div className="max-w-md w-full cyber-glass border border-white/20 p-6 rounded-2xl text-center shadow-2xl relative overflow-hidden">
                 {isSpectator ? (
                   <>
                     <div className="text-5xl mb-3">🏆</div>
@@ -2044,6 +2259,23 @@ export default function App() {
                   </>
                 ) : (battleState.winner === 'Player 1' && battleState.player1_id === clientId) || (battleState.winner === 'Player 2' && battleState.player2_id === clientId) || (battleState.winner === `Player ${playerNum}`) ? (
                   <>
+                    {/* Victory Confetti */}
+                    {confetti && (
+                      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                        {Array.from({ length: 30 }).map((_, i) => (
+                          <div
+                            key={i}
+                            className="absolute top-0 w-2 h-3 rounded-sm animate-confetti"
+                            style={{
+                              left: `${((i * 37 + 13) % 100)}%`,
+                              backgroundColor: ['#ff007f', '#00f0ff', '#39ff14', '#fffb00', '#9d4edd'][i % 5],
+                              '--confetti-duration': `${2 + ((i * 17) % 30) / 10}s`,
+                              '--confetti-delay': `${((i * 23) % 20) / 10}s`,
+                            }}
+                          />
+                        ))}
+                      </div>
+                    )}
                     <div className="text-5xl mb-3">🏆</div>
                     <h2 className="text-2xl font-extrabold tracking-wider text-cyber-blue font-mono uppercase mb-1 animate-pulse">
                       ALCHEMICAL VICTORY!
@@ -2054,6 +2286,24 @@ export default function App() {
                   </>
                 ) : (
                   <>
+                    {/* Defeat Particles */}
+                    {defeatParticles && (
+                      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                        {Array.from({ length: 20 }).map((_, i) => (
+                          <div
+                            key={i}
+                            className="absolute top-0 w-1.5 h-1.5 rounded-full animate-defeat-particle"
+                            style={{
+                              left: `${((i * 41 + 19) % 100)}%`,
+                              backgroundColor: ['#ef4444', '#6b7280', '#991b1b', '#374151'][i % 4],
+                              '--particle-duration': `${3 + ((i * 13) % 40) / 10}s`,
+                              '--particle-delay': `${((i * 29) % 20) / 10}s`,
+                              '--drift': `${((i * 31 - 15) % 60)}px`,
+                            }}
+                          />
+                        ))}
+                      </div>
+                    )}
                     <div className="text-5xl mb-3">💀</div>
                     <h2 className="text-2xl font-extrabold tracking-wider text-red-500 font-mono uppercase mb-1 animate-pulse">
                       SUMMON DEFEATED
@@ -2066,8 +2316,14 @@ export default function App() {
 
                 {/* Alchemical Diagnostic Logs */}
                 {battleState.post_match_summary && (
-                  <div className="mt-2 mb-4 bg-black/85 p-3 rounded-xl border border-cyber-purple/35 text-left font-mono text-[9px] text-[#39ff14] max-h-36 overflow-y-auto whitespace-pre-line leading-relaxed retro-scroll">
-                    {battleState.post_match_summary}
+                  <div className="mt-2 mb-4 bg-black/85 p-3 rounded-xl border border-cyber-purple/35 text-left font-mono text-[9px] max-h-36 overflow-y-auto whitespace-pre-line leading-relaxed retro-scroll">
+                    {battleState.post_match_summary.split('\n').map((line, i) => {
+                      let lineColor = 'text-[#39ff14]';
+                      if (line.startsWith('🏆')) lineColor = 'text-cyber-yellow font-bold';
+                      else if (line.startsWith('===')) lineColor = 'text-cyber-blue';
+                      else if (line.startsWith(' •')) lineColor = 'text-slate-300';
+                      return <div key={i} className={lineColor}>{line}</div>;
+                    })}
                   </div>
                 )}
 
@@ -2475,8 +2731,11 @@ export default function App() {
 
                       {/* VS Divider */}
                       <div className="flex flex-col items-center justify-center shrink-0">
-                        <div className="w-10 h-10 md:w-12 md:h-12 rounded-full border border-cyber-pink/55 flex items-center justify-center font-bold text-cyber-pink text-xs md:text-sm animate-pulse shadow-[0_0_15px_rgba(255,0,127,0.3)]">
-                          VS
+                        <div className="relative flex items-center justify-center">
+                          <div className="absolute w-10 h-10 md:w-12 md:h-12 rounded-full border border-cyber-pink/20 animate-vs-pulse" />
+                          <div className="w-10 h-10 md:w-12 md:h-12 rounded-full border border-cyber-pink/55 flex items-center justify-center font-bold text-cyber-pink text-xs md:text-sm shadow-[0_0_15px_rgba(255,0,127,0.3)] z-10">
+                            VS
+                          </div>
                         </div>
                       </div>
 
@@ -2515,7 +2774,7 @@ export default function App() {
                 // TOURNAMENT RESOLVED / CROWN CHAMPION
                 <div className="flex-1 flex flex-col justify-between items-center text-center py-6 min-h-0 gap-6">
                   <div className="flex-1 flex flex-col items-center justify-center">
-                    <div className="text-6xl md:text-7xl mb-4 animate-bounce-slow filter drop-shadow-[0_0_20px_rgba(255,251,0,0.4)]">🏆</div>
+                    <div className="text-6xl md:text-7xl mb-4 animate-bounce-slow" style={{ filter: 'drop-shadow(0 0 30px rgba(255,251,0,0.6)) drop-shadow(0 0 60px rgba(255,251,0,0.3))' }}>🏆</div>
                     
                     <h2 className="text-2xl md:text-3xl font-extrabold tracking-widest text-cyber-yellow font-mono uppercase mb-1 animate-pulse">
                       CHAMPION CROWNED!

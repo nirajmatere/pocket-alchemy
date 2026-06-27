@@ -620,6 +620,102 @@
   animation: shield-shatter-kf 0.5s ease-out forwards;
 }
 
+/* ===== NEW GAMIFICATION ANIMATIONS ===== */
+
+/* Screen view enter */
+@keyframes screen-enter-kf {
+  0% { opacity: 0; transform: translateY(14px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.animate-screen-enter {
+  animation: screen-enter-kf 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Staggered card deal */
+@keyframes card-deal-kf {
+  0% { opacity: 0; transform: scale(0.85) rotate(-3deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+.animate-card-deal {
+  animation: card-deal-kf 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  opacity: 0;
+}
+
+/* Bottom nav tab pop */
+@keyframes tab-pop-kf {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.18); }
+  100% { transform: scale(1.08); }
+}
+.animate-tab-pop {
+  animation: tab-pop-kf 0.25s ease-out forwards;
+}
+
+/* Toast slide-in from top */
+@keyframes toast-in-kf {
+  0% { opacity: 0; transform: translateY(-24px) scale(0.95); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+.animate-toast-in {
+  animation: toast-in-kf 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Toast fade out */
+@keyframes toast-out-kf {
+  0% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-16px) scale(0.95); }
+}
+.animate-toast-out {
+  animation: toast-out-kf 0.25s ease-in forwards;
+}
+
+/* Reward pop float */
+@keyframes reward-float-kf {
+  0% { opacity: 0; transform: translateY(0) scale(0.7); }
+  20% { opacity: 1; transform: translateY(-20px) scale(1.2); }
+  80% { opacity: 1; transform: translateY(-50px) scale(1); }
+  100% { opacity: 0; transform: translateY(-80px) scale(0.9); }
+}
+.animate-reward-float {
+  animation: reward-float-kf 1.8s ease-out forwards;
+}
+
+/* Animated number count-up pulse */
+@keyframes num-pop-kf {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.25); color: #39ff14; }
+}
+.animate-num-pop {
+  animation: num-pop-kf 0.4s ease-out;
+}
+
+/* XP bar fill */
+@keyframes xp-fill-kf {
+  0% { width: 0%; }
+}
+.animate-xp-fill {
+  animation: xp-fill-kf 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Impact burst on heavy hit */
+@keyframes impact-burst-kf {
+  0% { opacity: 0.85; transform: scale(0.5); }
+  60% { opacity: 0.6; transform: scale(1.4); }
+  100% { opacity: 0; transform: scale(1.8); }
+}
+.animate-impact-burst {
+  animation: impact-burst-kf 0.45s ease-out forwards;
+}
+
+/* Bottom nav glow pulse for active item */
+@keyframes nav-glow-kf {
+  0%, 100% { filter: drop-shadow(0 0 4px currentColor); }
+  50% { filter: drop-shadow(0 0 10px currentColor); }
+}
+.animate-nav-glow {
+  animation: nav-glow-kf 2s ease-in-out infinite;
+}
+
 .alchemical-card {
   width: 100%;
   max-width: 285px;

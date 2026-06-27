@@ -1,5 +1,9 @@
 /* eslint-disable no-unused-vars */
 import { useState, useEffect, useRef } from 'react';
+import BottomNav, { NAV_ITEMS } from './components/BottomNav.jsx';
+import PlayerHUD from './components/PlayerHUD.jsx';
+import { useToast } from './components/ToastProvider.jsx';
+import { hapticLight, hapticMedium, hapticHeavy, hapticSuccess } from './lib/haptics.js';
 
 const HOST_IP = 'https://pocket-alchemy-backend-440102621899.asia-northeast1.run.app'; // Live backend URL
 
@@ -169,9 +173,37 @@ export default function App() {
   const [hintText, setHintText] = useState(null);
   const [hintLoading, setHintLoading] = useState(false);
   const [profile, setProfile] = useState({ aether_dust: 0, catalysts: 0, unlocked_campaign_stage: 1, badges: [] });
+  const prevProfileRef = useRef(null);
+
+  // Reward popup state
+  const [rewardPopups, setRewardPopups] = useState([]);
+  const [impactBurst, setImpactBurst] = useState(false);
+
+  const toast = useToast();
+
+  const spawnReward = (text) => {
+    const id = Math.random().toString(36).slice(2);
+    setRewardPopups(prev => [...prev, { id, text }]);
+    setTimeout(() => setRewardPopups(prev => prev.filter(r => r.id !== id)), 1900);
+  };
   const [leaderboard, setLeaderboard] = useState([]);
   const [dailyQuest, setDailyQuest] = useState(null);
   const [battleHistory, setBattleHistory] = useState([]);
+
+  // Detect profile currency increases and show reward popups
+  useEffect(() => {
+    const prev = prevProfileRef.current;
+    if (prev) {
+      const dustDiff = profile.aether_dust - prev.aether_dust;
+      const catDiff = profile.catalysts - prev.catalysts;
+      const stageDiff = profile.unlocked_campaign_stage - prev.unlocked_campaign_stage;
+      if (dustDiff > 0) spawnReward(`✨ +${dustDiff} Aether Dust`);
+      if (catDiff > 0) spawnReward(`🧪 +${catDiff} Catalysts`);
+      if (stageDiff > 0) spawnReward(`🏰 Stage ${profile.unlocked_campaign_stage} Unlocked!`);
+    }
+    prevProfileRef.current = profile;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile.aether_dust, profile.catalysts, profile.unlocked_campaign_stage]);
 
   // Alchemical Sage Advisor Chat States
   const [advisorHistory, setAdvisorHistory] = useState([
@@ -342,7 +374,7 @@ export default function App() {
 
   const requestHint = async () => {
     if (profile.aether_dust < 15) {
-      alert("Insufficient Aether Dust! Need 15 to consult Chronos.");
+      toast({ type: 'warn', title: 'Insufficient Dust', message: 'Need 15 Aether Dust to consult Chronos.' });
       return;
     }
     setHintLoading(true);
@@ -358,11 +390,11 @@ export default function App() {
         setHintText(data.hint);
         setProfile(p => ({ ...p, aether_dust: data.remaining_dust }));
       } else {
-        alert(data.detail || "Failed to retrieve tactical advice.");
+        toast({ type: 'error', title: 'Chronos Unavailable', message: data.detail || 'Failed to retrieve tactical advice.' });
       }
     } catch (e) {
       console.error("Hint error:", e);
-      alert("Failed to communicate with Chronos.");
+      toast({ type: 'error', title: 'Connection Failed', message: 'Failed to communicate with Chronos.' });
     } finally {
       setHintLoading(false);
     }
@@ -414,8 +446,10 @@ export default function App() {
                                 (battleState.winner === 'Player 2' && !isP1User);
           if (winnerIsUser) {
             setConfetti(true); // eslint-disable-line react-hooks/set-state-in-effect
+            hapticSuccess();
           } else {
             setDefeatParticles(true); // eslint-disable-line react-hooks/set-state-in-effect
+            hapticMedium();
           }
         }
 
@@ -495,7 +529,8 @@ export default function App() {
               const isHeavy = meDamagePct > 0.15;
 
               setOppAnimClass('animate-strike-left');
-              if (isHeavy) setScreenShake(true);
+              if (isHeavy) { setScreenShake(true); setImpactBurst(true); hapticHeavy(); setTimeout(() => setImpactBurst(false), 460); }
+              else hapticMedium();
 
               setTimeout(() => {
                 setMyAnimClass('animate-damage-shake');
@@ -521,7 +556,8 @@ export default function App() {
               const isHeavy = oppDamagePct > 0.15;
 
               setMyAnimClass('animate-strike-right');
-              if (isHeavy) setScreenShake(true);
+              if (isHeavy) { setScreenShake(true); setImpactBurst(true); hapticHeavy(); setTimeout(() => setImpactBurst(false), 460); }
+              else hapticMedium();
 
               setTimeout(() => {
                 setOppAnimClass('animate-damage-shake');
@@ -805,11 +841,11 @@ export default function App() {
         connectRoomWebSocket(data.lobby_id, selectedCard);
         setActiveView('battle');
       } else {
-        alert("Failed to initialize campaign match.");
+        toast({ type: 'error', title: 'Battle Failed', message: 'Failed to initialize campaign match.' });
       }
     } catch (e) {
       console.error(e);
-      alert("Error reaching battle server.");
+      toast({ type: 'error', title: 'Network Error', message: 'Failed to reach the battle server.' });
     }
   };
 
@@ -835,11 +871,11 @@ export default function App() {
         connectRoomWebSocket(data.lobby_id, selectedCard);
         setActiveView('battle');
       } else {
-        alert("Failed to initialize random duel.");
+        toast({ type: 'error', title: 'Duel Failed', message: 'Failed to initialize random duel.' });
       }
     } catch (e) {
       console.error(e);
-      alert("Error reaching battle server.");
+      toast({ type: 'error', title: 'Network Error', message: 'Failed to reach the battle server.' });
     }
   };
 
@@ -866,11 +902,11 @@ export default function App() {
         connectRoomWebSocket(data.lobby_id, myCard);
         setActiveView('battle');
       } else {
-        alert("Failed to initialize custom alchemical duel.");
+        toast({ type: 'error', title: 'Duel Failed', message: 'Failed to initialize custom alchemical duel.' });
       }
     } catch (e) {
       console.error(e);
-      alert("Error reaching battle server.");
+      toast({ type: 'error', title: 'Network Error', message: 'Failed to reach the battle server.' });
     }
   };
 
@@ -895,17 +931,17 @@ export default function App() {
         setShowMatchmakingModal(false);
         setActiveView('lobby');
       } else {
-        alert("Failed to create PvP room.");
+        toast({ type: 'error', title: 'Room Failed', message: 'Failed to create PvP room.' });
       }
     } catch (e) {
       console.error(e);
-      alert("Error reaching battle server.");
+      toast({ type: 'error', title: 'Network Error', message: 'Failed to reach the battle server.' });
     }
   };
 
   const joinPvpBattle = async () => {
     if (!joinRoomCode.trim()) {
-      alert("Please enter a Room Code");
+      toast({ type: 'warn', title: 'Missing Code', message: 'Please enter a Room Code to join.' });
       return;
     }
     const code = joinRoomCode.trim().toUpperCase();
@@ -989,7 +1025,7 @@ export default function App() {
 
     ws.onerror = (error) => {
       console.error("WebSocket error:", error);
-      alert("WebSocket connection error. Please verify your backend server is active and reachable.");
+      toast({ type: 'error', title: 'Connection Error', message: 'WebSocket error. Verify backend is active and reachable.' });
     };
 
     ws.onclose = () => {
@@ -998,7 +1034,7 @@ export default function App() {
       setRoomState(null);
       setActiveView(prev => {
         if (prev === 'lobby' || prev === 'tournament' || prev === 'battle') {
-          alert("Connection lost. Returning to PvP room selection.");
+          toast({ type: 'warn', title: 'Connection Lost', message: 'Disconnected from room. Returning to lobby selection.' });
           return 'lobby_select';
         }
         return prev;
@@ -1208,66 +1244,95 @@ export default function App() {
   const { me, opponent, isSpectator } = getFightersForDisplay();
 
   return (
-    <div className={`flex flex-col text-slate-100 w-full ${activeView === 'battle' ? 'h-screen max-h-screen overflow-hidden p-2' : 'min-h-screen p-4 md:p-6 max-w-7xl mx-auto'}`}>
+    <div className={`flex flex-col text-slate-100 w-full ${activeView === 'battle' ? 'h-dvh max-h-dvh overflow-hidden p-2' : 'min-h-dvh p-4 pb-28 md:pb-6 md:p-6 max-w-7xl mx-auto'}`}>
+      {/* MOBILE BOTTOM NAV */}
+      {activeView !== 'battle' && activeView !== 'tournament' && (
+        <BottomNav
+          activeView={activeView}
+          disabled={activeView === 'lobby'}
+          onSettings={() => setShowSettingsModal(true)}
+          onNavigate={(view) => {
+            if (activeView === 'battle' || activeView === 'lobby' || activeView === 'tournament') return;
+            setActiveView(view);
+            if (view === 'inventory') fetchInventory();
+            else if (view === 'feed') fetchTodayFeed();
+            else if (view === 'advisor') fetchInventory();
+            else fetchDashboardData();
+          }}
+        />
+      )}
+
+      {/* FLOATING REWARD POPUPS */}
+      <div className="fixed inset-x-0 top-1/3 z-[199] pointer-events-none flex flex-col items-center gap-3">
+        {rewardPopups.map(r => (
+          <div key={r.id} className="animate-reward-float font-mono font-extrabold text-xl text-cyber-yellow drop-shadow-[0_0_12px_rgba(255,251,0,0.8)] tracking-wider">
+            {r.text}
+          </div>
+        ))}
+      </div>
+
       {/* HEADER NAVBAR */}
       {(activeView !== 'battle' && activeView !== 'tournament') && (
-        <header className="flex flex-col sm:flex-row items-center justify-between border-b border-white/10 pb-4 mb-6 gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-tr from-cyber-purple to-cyber-blue flex items-center justify-center font-mono font-bold text-black text-xl shadow-[0_0_15px_rgba(157,78,221,0.6)]">
-              ☿
-            </div>
-            <div>
-              <h1 className="text-2xl font-extrabold tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-cyber-purple via-cyber-blue to-cyber-green font-mono uppercase animate-flicker">
-                POCKET ALCHEMY
-              </h1>
-              <p className="text-xs text-slate-400 font-mono tracking-widest uppercase">multimodal mobile card battler</p>
-            </div>
-          </div>
-
-          <div className="flex flex-col sm:items-end gap-2 font-mono">
-            {/* Player Stats Dashboard Bar */}
-            {profile && (
-              <div className="flex gap-4 text-[10px] bg-slate-950/80 border border-white/5 px-3 py-1.5 rounded-lg select-none">
-                <span className="text-cyber-purple font-bold">✨ DUST: <span className="text-white">{profile.aether_dust}</span></span>
-                <span className="text-cyber-blue font-bold">🧪 CATALYSTS: <span className="text-white">{profile.catalysts}</span></span>
-                <span className="text-cyber-green font-bold">🏰 CAMPAIGN STAGE: <span className="text-white">{profile.unlocked_campaign_stage}</span></span>
+        <header className="flex flex-col sm:flex-row items-center justify-between border-b border-white/10 pb-4 mb-4 gap-3">
+          {/* Logo + compact HUD on mobile */}
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-start">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-gradient-to-tr from-cyber-purple to-cyber-blue flex items-center justify-center font-mono font-bold text-black text-xl shadow-[0_0_15px_rgba(157,78,221,0.6)] shrink-0">
+                ☿
               </div>
-            )}
-
-            {/* Navigation Tabs */}
-            <div className="flex gap-1.5 flex-wrap">
-              {[
-                { view: 'transmute', label: '1. TRANSMUTE', color: 'border-cyber-purple/20 hover:border-cyber-purple/40 hover:text-slate-200', activeColor: 'bg-cyber-purple text-black border-cyber-purple shadow-[0_0_10px_rgba(157,78,221,0.4)]' },
-                { view: 'inventory', label: '2. ALCHEMY VAULT', color: 'border-cyber-blue/20 hover:border-cyber-blue/40 hover:text-slate-200', activeColor: 'bg-cyber-blue text-black border-cyber-blue shadow-[0_0_10px_rgba(0,240,255,0.4)]' },
-                { view: 'leaderboard', label: '3. LEADERBOARD', color: 'border-cyber-green/20 hover:border-cyber-green/40 hover:text-slate-200', activeColor: 'bg-cyber-green text-black border-cyber-green shadow-[0_0_10px_rgba(57,255,20,0.4)]' },
-                { view: 'badges', label: '4. BADGES VAULT', color: 'border-cyber-pink/20 hover:border-cyber-pink/40 hover:text-slate-200', activeColor: 'bg-cyber-pink text-black border-cyber-pink shadow-[0_0_10px_rgba(255,0,127,0.4)]' },
-                { view: 'feed', label: '5. TODAY\'S FEED', color: 'border-cyber-yellow/20 hover:border-cyber-yellow/40 hover:text-slate-200', activeColor: 'bg-cyber-yellow text-black border-cyber-yellow shadow-[0_0_10px_rgba(255,251,0,0.4)]' },
-                { view: 'lobby_select', label: '6. PVP ROOMS', color: 'border-cyber-blue/20 hover:border-cyber-blue/40 hover:text-slate-200', activeColor: 'bg-cyber-blue text-black border-cyber-blue shadow-[0_0_10px_rgba(0,240,255,0.4)]' },
-                { view: 'advisor', label: '7. ALCHEMICAL SAGE', color: 'border-cyber-purple/20 hover:border-cyber-purple/40 hover:text-slate-200', activeColor: 'bg-cyber-purple text-black border-cyber-purple shadow-[0_0_10px_rgba(157,78,221,0.4)]' }
-              ].map((tab) => (
-                <button
-                  key={tab.view}
-                  onClick={() => {
-                    if (activeView !== 'battle' && activeView !== 'lobby' && activeView !== 'tournament') {
-                      setActiveView(tab.view);
-                      if (tab.view === 'inventory') fetchInventory();
-                      else if (tab.view === 'feed') fetchTodayFeed();
-                      else if (tab.view === 'advisor') fetchInventory();
-                      else fetchDashboardData();
-                    }
-                  }}
-                  disabled={activeView === 'battle' || activeView === 'lobby' || activeView === 'tournament'}
-                  className={`px-3 py-1.5 rounded-lg font-mono text-xs font-semibold transition-all border ${activeView === tab.view ? tab.activeColor : `bg-transparent text-slate-400 ${tab.color} disabled:opacity-40`
-                    }`}
-                >
-                  [{tab.label}]
-                </button>
-              ))}
+              <div>
+                <h1 className="text-lg sm:text-2xl font-extrabold tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-cyber-purple via-cyber-blue to-cyber-green font-mono uppercase animate-flicker">
+                  POCKET ALCHEMY
+                </h1>
+                <p className="text-[8px] sm:text-xs text-slate-400 font-mono tracking-widest uppercase hidden sm:block">multimodal mobile card battler</p>
+              </div>
+            </div>
+            {/* Compact HUD — mobile only */}
+            <div className="md:hidden">
+              <PlayerHUD profile={profile} compact />
             </div>
           </div>
 
-          {/* Connection status pills */}
-          <div className="flex gap-2 text-xs font-mono">
+          {/* Desktop: full HUD + desktop nav tabs */}
+          <div className="hidden md:flex flex-col items-end gap-2 font-mono flex-1">
+            <PlayerHUD profile={profile} />
+            {/* Navigation Tabs */}
+            <div className="flex gap-1.5 flex-wrap justify-end">
+              {NAV_ITEMS.map((tab) => {
+                const ACCENT_MAP = {
+                  transmute: 'bg-cyber-purple text-black border-cyber-purple shadow-[0_0_10px_rgba(157,78,221,0.4)]',
+                  inventory: 'bg-cyber-blue text-black border-cyber-blue shadow-[0_0_10px_rgba(0,240,255,0.4)]',
+                  leaderboard: 'bg-cyber-green text-black border-cyber-green shadow-[0_0_10px_rgba(57,255,20,0.4)]',
+                  badges: 'bg-cyber-pink text-black border-cyber-pink shadow-[0_0_10px_rgba(255,0,127,0.4)]',
+                  feed: 'bg-cyber-yellow text-black border-cyber-yellow shadow-[0_0_10px_rgba(255,251,0,0.4)]',
+                  lobby_select: 'bg-cyber-blue text-black border-cyber-blue shadow-[0_0_10px_rgba(0,240,255,0.4)]',
+                  advisor: 'bg-cyber-purple text-black border-cyber-purple shadow-[0_0_10px_rgba(157,78,221,0.4)]',
+                };
+                const isActive = activeView === tab.view;
+                return (
+                  <button
+                    key={tab.view}
+                    onClick={() => {
+                      if (activeView !== 'battle' && activeView !== 'lobby' && activeView !== 'tournament') {
+                        setActiveView(tab.view);
+                        if (tab.view === 'inventory') fetchInventory();
+                        else if (tab.view === 'feed') fetchTodayFeed();
+                        else if (tab.view === 'advisor') fetchInventory();
+                        else fetchDashboardData();
+                      }
+                    }}
+                    disabled={activeView === 'battle' || activeView === 'lobby' || activeView === 'tournament'}
+                    className={`px-3 py-1.5 rounded-lg font-mono text-xs font-semibold transition-all border ${isActive ? (ACCENT_MAP[tab.view] || 'bg-cyber-purple text-black border-cyber-purple') : 'bg-transparent text-slate-400 border-white/10 hover:border-white/30 hover:text-slate-200 disabled:opacity-40'}`}
+                  >
+                    {tab.icon} {tab.short}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Connection status pills — desktop */}
+          <div className="hidden sm:flex gap-2 text-xs font-mono">
             <button
               onClick={() => setShowSettingsModal(true)}
               className={`px-2 py-1 rounded border transition-all cursor-pointer hover:brightness-110 active:scale-95 ${healthStatus.status === 'healthy'
@@ -1276,13 +1341,13 @@ export default function App() {
                 }`}
               title="Click to configure backend IP address"
             >
-              CORE: {healthStatus.status === 'healthy' ? 'ONLINE' : 'OFFLINE ⚙️'}
+              CORE: {healthStatus.status === 'healthy' ? '✓ ONLINE' : 'OFFLINE ⚙️'}
             </button>
             <span className={`px-2 py-1 rounded border ${healthStatus.gemini_api_configured
                 ? 'bg-purple-500/10 text-purple-400 border-purple-500/30'
                 : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
               }`}>
-              GEMINI API: {healthStatus.gemini_api_configured ? 'CONNECTED' : 'LOCAL FALLBACK'}
+              AI: {healthStatus.gemini_api_configured ? '✓' : '⚠'}
             </span>
           </div>
         </header>
@@ -1290,7 +1355,7 @@ export default function App() {
 
       {/* VIEW 1: TRANSMUTATION MATRIX (LIVE CAMERA VIEWPORT) */}
       {activeView === 'transmute' && (
-        <div className="flex-1 flex flex-col lg:flex-row gap-6 items-stretch">
+        <div className="flex-1 flex flex-col lg:flex-row gap-6 items-stretch animate-screen-enter">
           {/* Live Camera Box */}
           <div className="flex-1 flex flex-col">
             <div
@@ -1404,7 +1469,7 @@ export default function App() {
                     {/* Shutter capture button overlay */}
                     <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20">
                       <button
-                        onClick={captureFrameAndTransmute}
+                        onClick={() => { hapticMedium(); captureFrameAndTransmute(); }}
                         disabled={isUploading}
                         className="w-14 h-14 rounded-full bg-white/20 hover:bg-white/40 border-4 border-white flex items-center justify-center transition-all cursor-pointer shadow-[0_0_15px_rgba(255,255,255,0.3)] hover:scale-105 active:scale-95 disabled:opacity-40"
                       >
@@ -1456,7 +1521,7 @@ export default function App() {
 
       {/* VIEW 2: ALCHEMY VAULT INVENTORY */}
       {activeView === 'inventory' && (
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col animate-screen-enter">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-bold tracking-wide font-mono uppercase flex items-center gap-2">
               <span>⚛</span> Forged Inventory ({cards.length})
@@ -1484,14 +1549,15 @@ export default function App() {
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 justify-items-center">
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6 justify-items-center">
               {cards.map((card, idx) => (
-                <TradingCard
-                  key={idx}
-                  card={card}
-                  onAction={() => selectCardForArena(card)}
-                  actionLabel="SUMMON TO ARENA"
-                />
+                <div key={idx} className="animate-card-deal w-full flex justify-center" style={{ animationDelay: `${idx * 60}ms` }}>
+                  <TradingCard
+                    card={card}
+                    onAction={() => { hapticLight(); selectCardForArena(card); }}
+                    actionLabel="SUMMON TO ARENA"
+                  />
+                </div>
               ))}
             </div>
           )}
@@ -1500,7 +1566,7 @@ export default function App() {
 
       {/* VIEW 6.5: ALCHEMICAL SAGE ADVISOR CHAT */}
       {activeView === 'advisor' && (
-        <div className="flex-1 flex flex-col lg:flex-row gap-6 items-stretch">
+        <div className="flex-1 flex flex-col lg:flex-row gap-6 items-stretch animate-screen-enter">
           {/* Chat Panel */}
           <div className="flex-1 flex flex-col cyber-glass border border-white/10 rounded-2xl p-5 bg-black/40 min-h-[500px]">
             <div className="flex items-center justify-between pb-3 border-b border-white/5 mb-4">
@@ -1624,7 +1690,7 @@ export default function App() {
 
       {/* VIEW 2.5: LEADERBOARD & SCOREBOARD */}
       {activeView === 'leaderboard' && (
-        <div className="flex-1 flex flex-col gap-6 font-mono">
+        <div className="flex-1 flex flex-col gap-6 font-mono animate-screen-enter">
           {/* Daily Quest */}
           {dailyQuest && (
             <div className="cyber-glass border border-cyber-green/30 bg-cyber-green/5 p-4 rounded-xl flex items-center justify-between">
@@ -1738,7 +1804,7 @@ export default function App() {
 
       {/* VIEW 2.6: BADGES VAULT */}
       {activeView === 'badges' && (
-        <div className="flex-1 flex flex-col gap-6 font-mono">
+        <div className="flex-1 flex flex-col gap-6 font-mono animate-screen-enter">
           <div className="cyber-glass rounded-xl p-5 border border-white/10 bg-black/40">
             <h2 className="text-xl font-bold font-mono text-amber-400 uppercase tracking-wider">🏆 Badges Vault</h2>
             <p className="text-xs text-slate-400 mt-1">Unlock prestigious titles by progressing through solo campaign boss nodes.</p>
@@ -1780,7 +1846,7 @@ export default function App() {
 
       {/* VIEW 2.7: TODAY'S FEED */}
       {activeView === 'feed' && (
-        <div className="flex-1 flex flex-col font-mono">
+        <div className="flex-1 flex flex-col font-mono animate-screen-enter">
           <div className="cyber-glass rounded-xl p-5 border border-white/10 bg-black/40 mb-6">
             <h2 className="text-xl font-bold font-mono text-cyber-yellow uppercase tracking-wider">🔥 Today's Alchemical Feed</h2>
             <p className="text-xs text-slate-400 mt-1">Discover the latest cards forged in the crucible today. Challenge any card using your vault summons!</p>
@@ -1795,17 +1861,19 @@ export default function App() {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 justify-items-center">
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6 justify-items-center">
               {todayFeed.map((card, idx) => (
-                <TradingCard
-                  key={idx}
-                  card={card}
-                  onAction={() => {
-                    setChallengerTargetOpponent(card);
-                    setShowFighterSelectorModal(true);
-                  }}
-                  actionLabel="⚔️ CHALLENGE SUMMON"
-                />
+                <div key={idx} className="animate-card-deal w-full flex justify-center" style={{ animationDelay: `${idx * 60}ms` }}>
+                  <TradingCard
+                    card={card}
+                    onAction={() => {
+                      hapticLight();
+                      setChallengerTargetOpponent(card);
+                      setShowFighterSelectorModal(true);
+                    }}
+                    actionLabel="⚔️ CHALLENGE SUMMON"
+                  />
+                </div>
               ))}
             </div>
           )}
@@ -1814,7 +1882,7 @@ export default function App() {
 
       {/* VIEW 3: BATTLE ARENA */}
       {activeView === 'battle' && battleState && me && (
-        <div className={`flex-1 flex flex-col gap-3 justify-between overflow-hidden relative ${screenShake ? 'animate-screen-shake' : ''}`}>
+        <div className={`flex-1 flex flex-col gap-2 justify-between overflow-hidden relative ${screenShake ? 'animate-screen-shake' : ''}`}>
 
           {/* Ability Cast Screen Flash Overlay */}
           {abilityFlash && (
@@ -1824,6 +1892,13 @@ export default function App() {
                 background: `radial-gradient(circle at center, ${getElementGlowColor(abilityFlash.element)}, transparent 70%)`
               }}
             />
+          )}
+
+          {/* Heavy Hit Impact Burst */}
+          {impactBurst && (
+            <div className="absolute inset-0 z-36 pointer-events-none flex items-center justify-center">
+              <div className="w-32 h-32 rounded-full border-4 border-white/60 animate-impact-burst" />
+            </div>
           )}
 
           {/* Round Intro Announcement Overlay */}
@@ -1883,7 +1958,7 @@ export default function App() {
           </div>
 
           {/* Combatants 3-Column Arena Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-stretch flex-1 min-h-0 overflow-y-auto md:overflow-hidden">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-3 items-stretch flex-1 min-h-0 overflow-y-auto md:overflow-hidden">
 
             {/* COLUMN 1: Player Card Details */}
             <div
@@ -1921,7 +1996,7 @@ export default function App() {
               )}
 
               {/* Card Art Image Frame */}
-              <div className="w-full h-44 rounded-lg bg-black/60 flex items-center justify-center overflow-hidden border border-white/5 relative mb-3">
+              <div className="w-full h-28 sm:h-36 md:h-44 rounded-lg bg-black/60 flex items-center justify-center overflow-hidden border border-white/5 relative mb-2 md:mb-3">
                 {/* Damage/Heal overlay on card art */}
                 {cardOverlay.me && (
                   <div className={`absolute inset-0 z-20 pointer-events-none rounded-lg ${cardOverlay.me === 'damage' ? 'animate-damage-overlay' : 'animate-heal-overlay'}`} />
@@ -1971,7 +2046,7 @@ export default function App() {
             </div>
 
             {/* COLUMN 2: Comparative metrics & Mascot Comments & Chronos hint */}
-            <div className="flex flex-col gap-3 justify-between flex-1 min-h-0 bg-slate-950/30 border border-white/5 rounded-xl p-3 overflow-y-auto retro-scroll">
+            <div className="col-span-2 md:col-span-1 order-last md:order-none flex flex-col gap-2 md:gap-3 justify-between flex-1 min-h-0 bg-slate-950/30 border border-white/5 rounded-xl p-2 md:p-3 overflow-y-auto retro-scroll">
 
               {/* Referee Mascot */}
               <div className="flex items-start gap-3 bg-black/60 border border-white/10 p-3 rounded-xl relative shadow-[inset_0_0_10px_rgba(255,255,255,0.05)]">
@@ -2098,7 +2173,7 @@ export default function App() {
               )}
 
               {/* Card Art Image Frame */}
-              <div className="w-full h-44 rounded-lg bg-black/60 flex items-center justify-center overflow-hidden border border-white/5 relative mb-3">
+              <div className="w-full h-28 sm:h-36 md:h-44 rounded-lg bg-black/60 flex items-center justify-center overflow-hidden border border-white/5 relative mb-2 md:mb-3">
                 {/* Damage/Heal overlay on card art */}
                 {cardOverlay.opp && (
                   <div className={`absolute inset-0 z-20 pointer-events-none rounded-lg ${cardOverlay.opp === 'damage' ? 'animate-damage-overlay' : 'animate-heal-overlay'}`} />
@@ -2151,48 +2226,48 @@ export default function App() {
 
           {/* Unified Action Buttons Row */}
           {!isSpectator ? (
-            <div className="flex flex-col gap-2 shrink-0">
+            <div className="flex flex-col gap-1.5 shrink-0 sticky bottom-0 bg-[#08090d]/90 backdrop-blur-sm pt-1 pb-1 md:pb-0 md:static md:bg-transparent md:backdrop-blur-none rounded-t-xl md:rounded-none border-t border-white/5 md:border-0">
 
               {/* Stance Selector Panel */}
-              <div className="bg-black/60 border border-white/10 rounded-xl p-3 flex flex-col gap-2 font-mono">
-                <div className="flex justify-between items-center text-[10px] text-slate-400">
+              <div className="bg-black/60 border border-white/10 rounded-xl p-2 md:p-3 flex flex-col gap-1.5 md:gap-2 font-mono">
+                <div className="hidden md:flex justify-between items-center text-[10px] text-slate-400">
                   <span>TACTICAL STANCE SETTING:</span>
                   <span className="text-slate-500 font-bold uppercase">Influences Speed & Combat Power</span>
                 </div>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-3 gap-1.5 md:gap-2">
                   {[
-                    { id: 'focused', name: 'Focused', desc: 'Cooldown rate x2 | Speed x1.25', color: 'border-cyber-blue text-cyber-blue shadow-[0_0_10px_rgba(0,240,255,0.2)] bg-cyber-blue/10', inactive: 'border-white/5 hover:border-cyber-blue/30 text-slate-400' },
-                    { id: 'aggressive', name: 'Aggressive', desc: 'Dmg x1.2 | Speed x0.9', color: 'border-cyber-pink text-cyber-pink shadow-[0_0_10px_rgba(255,0,127,0.2)] bg-cyber-pink/10', inactive: 'border-white/5 hover:border-cyber-pink/30 text-slate-400' },
-                    { id: 'defensive', name: 'Defensive', desc: 'Block -15 dmg | Dmg x0.8', color: 'border-cyber-green text-cyber-green shadow-[0_0_10px_rgba(57,255,20,0.2)] bg-cyber-green/10', inactive: 'border-white/5 hover:border-cyber-green/30 text-slate-400' }
+                    { id: 'focused', name: 'Focus', desc: 'CDR x2 | SPD x1.25', color: 'border-cyber-blue text-cyber-blue shadow-[0_0_10px_rgba(0,240,255,0.2)] bg-cyber-blue/10', inactive: 'border-white/5 hover:border-cyber-blue/30 text-slate-400' },
+                    { id: 'aggressive', name: 'Aggro', desc: 'DMG x1.2 | SPD x0.9', color: 'border-cyber-pink text-cyber-pink shadow-[0_0_10px_rgba(255,0,127,0.2)] bg-cyber-pink/10', inactive: 'border-white/5 hover:border-cyber-pink/30 text-slate-400' },
+                    { id: 'defensive', name: 'Guard', desc: '-15 dmg | DMG x0.8', color: 'border-cyber-green text-cyber-green shadow-[0_0_10px_rgba(57,255,20,0.2)] bg-cyber-green/10', inactive: 'border-white/5 hover:border-cyber-green/30 text-slate-400' }
                   ].map((st) => (
                     <button
                       key={st.id}
                       disabled={battleState.game_over || actionLocked}
-                      onClick={() => setSelectedStance(st.id)}
-                      className={`py-2 px-1 rounded-lg border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 ${selectedStance === st.id ? st.color : st.inactive
+                      onClick={() => { hapticLight(); setSelectedStance(st.id); }}
+                      className={`py-2.5 md:py-2 px-1 rounded-lg border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 min-h-[44px] ${selectedStance === st.id ? st.color : st.inactive
                         } ${selectedStance === st.id && stancePulse === st.id ? 'animate-stance-change' : ''}`}
                     >
                       <span className="text-[11px] font-bold uppercase">{st.name}</span>
-                      <span className="text-[7px] text-slate-500 font-semibold">{st.desc}</span>
+                      <span className="text-[7px] text-slate-500 font-semibold hidden sm:block">{st.desc}</span>
                     </button>
                   ))}
                 </div>
               </div>
 
               {/* Actions row */}
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-1.5 md:gap-2">
                 <button
                   disabled={battleState.game_over || actionLocked}
-                  onClick={() => sendBattleAction('attack')}
-                  className="py-2.5 rounded-lg bg-white/10 hover:bg-white/20 font-bold font-mono text-xs uppercase border border-white/20 disabled:opacity-30 cursor-pointer text-center text-white"
+                  onClick={() => { hapticMedium(); sendBattleAction('attack'); }}
+                  className="py-3 md:py-2.5 rounded-lg bg-white/10 hover:bg-white/20 active:scale-95 font-bold font-mono text-xs uppercase border border-white/20 disabled:opacity-30 cursor-pointer text-center text-white min-h-[48px]"
                 >
                   ⚔️ Strike Attack
                 </button>
                 <div className="flex flex-col">
                   <button
                     disabled={battleState.game_over || actionLocked || me.ability_cooldown > 0}
-                    onClick={() => sendBattleAction('ability')}
-                    className={`py-2.5 rounded-lg font-bold font-mono text-xs uppercase border disabled:opacity-30 cursor-pointer text-center transition-all duration-300 ${me.ability_cooldown > 0
+                    onClick={() => { hapticMedium(); sendBattleAction('ability'); }}
+                    className={`py-3 md:py-2.5 rounded-lg font-bold font-mono text-xs uppercase border disabled:opacity-30 cursor-pointer text-center transition-all duration-300 min-h-[48px] active:scale-95 ${me.ability_cooldown > 0
                         ? 'bg-slate-900 border-white/5 text-slate-500'
                         : me.ability_cooldown === 0 && !battleState.game_over && !actionLocked
                           ? 'bg-gradient-to-r from-cyber-purple to-cyber-blue text-black border-cyber-purple shadow-[0_0_18px_rgba(157,78,221,0.6)] animate-pulse'
@@ -2223,12 +2298,12 @@ export default function App() {
                       setSelectedStance(data.stance);
                     } else {
                       const errData = await res.json();
-                      alert(errData.detail || "Managed Agent failed to deploy.");
+                      toast({ type: 'error', title: 'Agent Failed', message: errData.detail || 'Managed Agent failed to deploy.' });
                       setActionLocked(false);
                     }
                   } catch (e) {
                     console.error("Managed Agent deployment error:", e);
-                    alert("Failed to communicate with Managed Agent server.");
+                    toast({ type: 'error', title: 'Agent Error', message: 'Failed to communicate with Managed Agent server.' });
                     setActionLocked(false);
                   }
                 }}
@@ -2384,7 +2459,7 @@ export default function App() {
                   onClick={() => {
                     const activeParticipants = roomState.members.filter(m => m.card_name !== 'Unregistered');
                     if (activeParticipants.length < 2) {
-                      alert("Tournament requires at least 2 players with registered champion cards.");
+                      toast({ type: 'warn', title: 'Not Enough Players', message: 'Tournament requires at least 2 players with registered champion cards.' });
                       return;
                     }
                     if (socket && socket.readyState === WebSocket.OPEN) {
@@ -2624,7 +2699,7 @@ export default function App() {
                   <button
                     onClick={() => {
                       if (!joinRoomCode.trim()) {
-                        alert("Please enter a Room Code");
+                        toast({ type: 'warn', title: 'Missing Code', message: 'Please enter a Room Code to join.' });
                         return;
                       }
                       const code = joinRoomCode.trim().toUpperCase();
@@ -2646,7 +2721,7 @@ export default function App() {
 
       {/* VIEW 4.5: TOURNAMENT ARENA */}
       {activeView === 'tournament' && roomState && roomState.tournament_matches && (
-        <div className="flex-1 flex flex-col gap-4 font-mono select-none overflow-hidden h-screen max-h-screen p-2">
+        <div className="flex-1 flex flex-col gap-4 font-mono select-none overflow-hidden h-dvh max-h-dvh p-2">
           {/* Header */}
           <div className="flex justify-between items-center bg-black/60 border border-white/10 px-4 py-2 rounded-xl text-xs shrink-0">
             <div>

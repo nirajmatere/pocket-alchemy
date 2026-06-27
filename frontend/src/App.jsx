@@ -433,7 +433,7 @@ export default function App() {
   // Control HTML5 camera streaming
   useEffect(() => {
     let timerId = setTimeout(() => {
-      if (activeView === 'transmute') {
+      if (activeView === 'transmute' && !isUploading) {
         startCamera();
       } else {
         stopCamera();
@@ -444,7 +444,7 @@ export default function App() {
       stopCamera();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeView]);
+  }, [activeView, isUploading]);
 
   // Reset action locks when a new round starts
   useEffect(() => {

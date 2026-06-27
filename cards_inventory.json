@@ -1,0 +1,366 @@
+[
+  {
+    "card_name": "Famichiki Phoenix",
+    "element": "Fire",
+    "base_stats": {
+      "health": 120,
+      "attack": 70,
+      "speed": 60
+    },
+    "ability_name": "Crispy Heal",
+    "effect_type": "heal",
+    "value": 35,
+    "lore": "The legendary crispy treat of Famima convenience stores. Transmutes greasy goodness into pure vitality and raw combat morale.",
+    "image_url": "/uploads/46262b3d-4c68-487f-9887-e241df48f559.png"
+  },
+  {
+    "card_name": "Suica Ninja",
+    "element": "Lightning",
+    "base_stats": {
+      "health": 70,
+      "attack": 60,
+      "speed": 120
+    },
+    "ability_name": "Gate Rush",
+    "effect_type": "boost_speed",
+    "value": 25,
+    "lore": "A sleek alchemical slate that grants lightning-fast travel through the Tokyo transit grid. Beeps with raw lightning power.",
+    "image_url": "/uploads/0e4d0f8d-1700-44c7-9fac-c4635837ef15.png"
+  },
+  {
+    "card_name": "Suica Ninja",
+    "element": "Lightning",
+    "base_stats": {
+      "health": 70,
+      "attack": 60,
+      "speed": 120
+    },
+    "ability_name": "Gate Rush",
+    "effect_type": "boost_speed",
+    "value": 25,
+    "lore": "A sleek alchemical slate that grants lightning-fast travel through the Tokyo transit grid. Beeps with raw lightning power.",
+    "image_url": "/uploads/80837956-a53f-45e1-bd5d-78dc52bccbed.jpg"
+  },
+  {
+    "card_name": "The Hackathon Judge",
+    "element": "Neutral",
+    "base_stats": {
+      "health": 80,
+      "attack": 90,
+      "speed": 80
+    },
+    "ability_name": "Final Pitch Verdict",
+    "effect_type": "damage",
+    "value": 50,
+    "lore": "Equipped with a clipboard and high standards. One glare can dismiss a RAG chatbot instantly. Requires absolute visual wow-factor to appease.",
+    "image_url": "/uploads/0d642e09-9a9f-465a-a30d-074d1472dc1e.jpg"
+  },
+  {
+    "card_name": "Boss Coffee Shogun",
+    "element": "Fire",
+    "base_stats": {
+      "health": 100,
+      "attack": 80,
+      "speed": 70
+    },
+    "ability_name": "Caffeine Overdrive",
+    "effect_type": "boost_attack",
+    "value": 30,
+    "lore": "Brewed in the heart of Tokyo's vending machines. Contains enough raw alchemical energy to power a developer through a 48-hour hackathon.",
+    "image_url": "/uploads/352ea9bb-fda0-441b-85dc-19ce989da89a.jpg"
+  },
+  {
+    "card_name": "Famichiki Phoenix",
+    "element": "Fire",
+    "base_stats": {
+      "health": 120,
+      "attack": 70,
+      "speed": 60
+    },
+    "ability_name": "Crispy Heal",
+    "effect_type": "heal",
+    "value": 35,
+    "lore": "The legendary crispy treat of Famima convenience stores. Transmutes greasy goodness into pure vitality and raw combat morale.",
+    "image_url": "/uploads/28f845bf-cbff-4cfc-8bed-7135e7fa8782.jpg"
+  },
+  {
+    "card_name": "Mechanical Overlord",
+    "element": "Earth",
+    "base_stats": {
+      "health": 90,
+      "attack": 110,
+      "speed": 50
+    },
+    "ability_name": "Clicky Stun",
+    "effect_type": "damage",
+    "value": 40,
+    "lore": "Clacked into existence by a sleep-deprived coder. Its heavy mechanical steel switches deal massive alchemical earth damage.",
+    "image_url": "/uploads/61454bce-57c1-44e2-9cb0-44285e8d3c1e.jpg"
+  },
+  {
+    "card_name": "Famichiki Phoenix",
+    "element": "Fire",
+    "base_stats": {
+      "health": 120,
+      "attack": 70,
+      "speed": 60
+    },
+    "ability_name": "Crispy Heal",
+    "effect_type": "heal",
+    "value": 35,
+    "lore": "The legendary crispy treat of Famima convenience stores. Transmutes greasy goodness into pure vitality and raw combat morale.",
+    "image_url": "/uploads/c7a4ba41-658e-4fc9-aaf6-1f043569e7a2.jpg"
+  },
+  {
+    "card_name": "Famichiki Phoenix",
+    "element": "Fire",
+    "base_stats": {
+      "health": 120,
+      "attack": 70,
+      "speed": 60
+    },
+    "ability_name": "Crispy Heal",
+    "effect_type": "heal",
+    "value": 35,
+    "lore": "The legendary crispy treat of Famima convenience stores. Transmutes greasy goodness into pure vitality and raw combat morale.",
+    "image_url": "/uploads/85368cb3-783e-4d05-8d6d-96f73e62c449.jpg"
+  },
+  {
+    "card_name": "The Hackathon Judge",
+    "element": "Neutral",
+    "base_stats": {
+      "health": 80,
+      "attack": 90,
+      "speed": 80
+    },
+    "ability_name": "Final Pitch Verdict",
+    "effect_type": "damage",
+    "value": 50,
+    "lore": "Equipped with a clipboard and high standards. One glare can dismiss a RAG chatbot instantly. Requires absolute visual wow-factor to appease.",
+    "image_url": "/uploads/81ff0498-cc1a-435f-9a6e-102d654ba86f.jpg"
+  },
+  {
+    "card_name": "Suica Ninja",
+    "element": "Lightning",
+    "base_stats": {
+      "health": 70,
+      "attack": 60,
+      "speed": 120
+    },
+    "ability_name": "Gate Rush",
+    "effect_type": "boost_speed",
+    "value": 25,
+    "lore": "A sleek alchemical slate that grants lightning-fast travel through the Tokyo transit grid. Beeps with raw lightning power.",
+    "image_url": "/uploads/57f3f4b7-6bf1-4500-b0f1-28aa11f68155.jpg"
+  },
+  {
+    "card_name": "Suica Ninja",
+    "element": "Lightning",
+    "base_stats": {
+      "health": 70,
+      "attack": 60,
+      "speed": 120
+    },
+    "ability_name": "Gate Rush",
+    "effect_type": "boost_speed",
+    "value": 25,
+    "lore": "A sleek alchemical slate that grants lightning-fast travel through the Tokyo transit grid. Beeps with raw lightning power.",
+    "image_url": "/uploads/30de8a2d-dbd5-4ca3-a97a-a12f8dcb847c.jpg"
+  },
+  {
+    "card_name": "Famichiki Phoenix",
+    "element": "Fire",
+    "base_stats": {
+      "health": 120,
+      "attack": 70,
+      "speed": 60
+    },
+    "ability_name": "Crispy Heal",
+    "effect_type": "heal",
+    "value": 35,
+    "lore": "The legendary crispy treat of Famima convenience stores. Transmutes greasy goodness into pure vitality and raw combat morale.",
+    "image_url": "/uploads/78ffb389-23f6-4c69-abb5-72b04b3058ae.jpg"
+  },
+  {
+    "card_name": "Focused Gaze",
+    "element": "Neutral",
+    "base_stats": {
+      "health": 100,
+      "attack": 80,
+      "speed": 70
+    },
+    "ability_name": "Keen Insight",
+    "effect_type": "boost_attack",
+    "value": 30,
+    "lore": "Through lenses of profound observation, this alchemist discerns the hidden weaknesses of foes. Their unwavering gaze grants unparalleled precision in combat.",
+    "image_url": "/uploads/fd04be1e-bd56-4d42-902c-06688904b6a3.jpg"
+  },
+  {
+    "card_name": "Ionic Hydrator",
+    "element": "Lightning",
+    "base_stats": {
+      "health": 60,
+      "attack": 80,
+      "speed": 110
+    },
+    "ability_name": "Ion no Chikara",
+    "effect_type": "heal",
+    "value": 35,
+    "lore": "This discarded plastic vessel, once filled with the revitalizing essence of Pocari Sweat, still hums with residual ionic energy. It grants a momentary surge of life to those who wield its empty form.",
+    "image_url": "/uploads/0bdae53e-1459-4f3f-9bc3-dd2708f39c02.jpg"
+  },
+  {
+    "card_name": "The Observer",
+    "element": "Neutral",
+    "base_stats": {
+      "health": 80,
+      "attack": 70,
+      "speed": 100
+    },
+    "ability_name": "Keen Insight",
+    "effect_type": "boost_speed",
+    "value": 30,
+    "lore": "This alchemist's power lies in their meticulous observation, seeing patterns and weaknesses others miss. Their keen intellect allows them to react with unparalleled swiftness.",
+    "image_url": "/uploads/1d97b63c-57bd-4186-8132-ee36435850d9.jpg"
+  },
+  {
+    "card_name": "Grape Soda Surge",
+    "element": "Lightning",
+    "base_stats": {
+      "health": 70,
+      "attack": 90,
+      "speed": 90
+    },
+    "ability_name": "Fizzy Jolt",
+    "effect_type": "damage",
+    "value": 35,
+    "lore": "This shimmering purple elixir, bottled within a humble aluminum shell, unleashes a torrent of sugary energy. Its potent fizz can shock foes, leaving them reeling from its unexpected burst.",
+    "image_url": "/uploads/5247b3c7-a651-4385-9058-ba8d3ccc4190.jpg"
+  },
+  {
+    "card_name": "Insightful Observer",
+    "element": "Neutral",
+    "base_stats": {
+      "health": 90,
+      "attack": 60,
+      "speed": 100
+    },
+    "ability_name": "Keen Perception",
+    "effect_type": "boost_speed",
+    "value": 30,
+    "lore": "This alchemist's keen eyes pierce through illusions, revealing hidden truths and weaknesses. Their focused gaze allows them to anticipate foes, turning observation into a tactical advantage.",
+    "image_url": "/uploads/8f0e2a55-eb9e-4e64-93f7-49c979ce9673.jpg"
+  },
+  {
+    "card_name": "Crimson Sentinel",
+    "element": "Fire",
+    "base_stats": {
+      "health": 100,
+      "attack": 80,
+      "speed": 70
+    },
+    "ability_name": "Crimson Ward",
+    "effect_type": "shield",
+    "value": 30,
+    "lore": "Woven from threads imbued with the spirit of ancient protectors, the Crimson Sentinel stands firm. Its vibrant turban radiates a fiery aura, shielding allies from harm.",
+    "image_url": "/uploads/e1cef18c-ad11-4aec-8ea5-98b0bdb15afa.jpg"
+  },
+  {
+    "card_name": "Sonic Sentinel",
+    "element": "Lightning",
+    "base_stats": {
+      "health": 80,
+      "attack": 90,
+      "speed": 80
+    },
+    "ability_name": "Echoing Resonance",
+    "effect_type": "damage",
+    "value": 35,
+    "lore": "Forged from the whispers of the wind and the hum of distant cities, these headphones channel pure sonic energy. They allow their wielder to perceive unseen threats and unleash disruptive waves of sound.",
+    "image_url": "/uploads/5bb3ca92-a3fe-4031-bc35-3401337dc86f.jpg"
+  },
+  {
+    "card_name": "Mechanical Overlord",
+    "element": "Earth",
+    "base_stats": {
+      "health": 90,
+      "attack": 110,
+      "speed": 50
+    },
+    "ability_name": "Clicky Stun",
+    "effect_type": "damage",
+    "value": 40,
+    "lore": "Clacked into existence by a sleep-deprived coder. Its heavy mechanical steel switches deal massive alchemical earth damage.",
+    "image_url": "/uploads/06dd94ea-bec7-4b04-b4df-486543c4a94e.jpg"
+  },
+  {
+    "card_name": "Mechanical Overlord",
+    "element": "Earth",
+    "base_stats": {
+      "health": 90,
+      "attack": 110,
+      "speed": 50
+    },
+    "ability_name": "Clicky Stun",
+    "effect_type": "damage",
+    "value": 40,
+    "lore": "Clacked into existence by a sleep-deprived coder. Its heavy mechanical steel switches deal massive alchemical earth damage.",
+    "image_url": "/uploads/27a8e7b5-a633-4c74-872b-c1994677e6bd.jpg"
+  },
+  {
+    "card_name": "Greyweave Codex",
+    "element": "Fire",
+    "base_stats": {
+      "health": 70,
+      "attack": 80,
+      "speed": 100
+    },
+    "ability_name": "Ignite Insight",
+    "effect_type": "boost_attack",
+    "value": 35,
+    "lore": "Woven from threads of digital wisdom, this ancient-looking codex holds the power to ignite the minds of its wielder, revealing forgotten strategies.",
+    "image_url": "/uploads/5469cddd-dc0d-4030-8c0f-5b0c3945598b.jpg"
+  },
+  {
+    "card_name": "Mechanical Overlord",
+    "element": "Earth",
+    "base_stats": {
+      "health": 90,
+      "attack": 110,
+      "speed": 50
+    },
+    "ability_name": "Clicky Stun",
+    "effect_type": "damage",
+    "value": 40,
+    "lore": "Clacked into existence by a sleep-deprived coder. Its heavy mechanical steel switches deal massive alchemical earth damage.",
+    "image_url": "/uploads/6ad0aebe-e6df-4fb4-b394-58e8a417d9fe.jpg"
+  },
+  {
+    "card_name": "Boss Coffee Shogun",
+    "element": "Fire",
+    "base_stats": {
+      "health": 100,
+      "attack": 80,
+      "speed": 70
+    },
+    "ability_name": "Caffeine Overdrive",
+    "effect_type": "boost_attack",
+    "value": 30,
+    "lore": "Brewed in the heart of Tokyo's vending machines. Contains enough raw alchemical energy to power a developer through a 48-hour hackathon.",
+    "image_url": "/uploads/a421a57d-bab7-4e5b-90ad-b9788a4614c5.jpg"
+  },
+  {
+    "card_name": "API Key Sentinel",
+    "element": "Lightning",
+    "base_stats": {
+      "health": 70,
+      "attack": 100,
+      "speed": 80
+    },
+    "ability_name": "Keyed Access",
+    "effect_type": "boost_attack",
+    "value": 35,
+    "lore": "This digital guardian holds the very essence of connection, unlocking vast computational power. Its glowing lines of code are conduits for raw data, ready to empower its allies.",
+    "image_url": "/uploads/54f57182-dd06-4814-8740-4ce0a8e30ba9.jpg"
+  }
+]

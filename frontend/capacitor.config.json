@@ -1,0 +1,8 @@
+{
+  "appId": "com.pocketalchemy.app",
+  "appName": "Pocket Alchemy",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  }
+}

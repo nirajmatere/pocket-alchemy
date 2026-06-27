@@ -11,6 +11,22 @@ logger = logging.getLogger("transmute")
 
 # --- Pydantic Schemas ---
 
+class GeminiGameCard(BaseModel):
+    card_name: str = Field(description="Creative, thematic name for the card based on the object.")
+    element: str = Field(description="Elemental affinity. One of: Fire, Water, Lightning, Earth, Neutral.")
+    health: int = Field(description="Health points. Must be between 20 and 160.")
+    attack: int = Field(description="Attack power. Must be between 20 and 160.")
+    speed: int = Field(description="Speed. Must be between 20 and 160.")
+    ability_name: str = Field(description="Name of the alchemical special ability.")
+    effect_type: str = Field(description="Combat effect. One of: damage, heal, boost_speed, boost_attack, shield.")
+    value: int = Field(description="Numeric value of the ability effect (e.g. amount to heal or damage). Must be between 10 and 50.")
+    lore: str = Field(description="A creative 1-2 sentence story connecting the physical object to its alchemical powers.")
+    uniqueness_score: int = Field(default=50, description="Rarity score of the visual object from 0 to 100.")
+    uniqueness_reason: str = Field(default="", description="1-sentence explanation of the uniqueness score.")
+    sub_element: str = Field(default="Aether", description="Sub-elemental affinity. One of: Plasma, Frost, Quartz, Vapor, Aether.")
+    rarity: str = Field(default="Common", description="Rarity tier: Common, Rare, Epic, Legendary.")
+    imagen_prompt: str = Field(default="", description="Detailed alchemical/fantasy/cyberpunk art prompt (1-2 sentences) representing the object.")
+
 class CardStats(BaseModel):
     health: int = Field(description="Health points. Must be between 20 and 160.")
     attack: int = Field(description="Attack power. Must be between 20 and 160.")
@@ -169,7 +185,7 @@ def balance_stats(stats: CardStats, target_sum: int = 250) -> CardStats:
 
 # --- Primary Transmutation Function ---
 
-async def transmute_image_to_card(image_bytes: bytes, filename: str) -> GameCard:
+async def transmute_image_to_card(image_bytes: bytes, filename: str, mime_type: str = "image/jpeg") -> GameCard:
     """
     Takes raw image bytes, sends them to Gemini 2.5 Flash using Structured Outputs,
     performs stat balancing, generates stylized Imagen 3 artwork, and returns a fully validated GameCard.
@@ -230,12 +246,12 @@ async def transmute_image_to_card(image_bytes: bytes, filename: str) -> GameCard
         response = client.models.generate_content(
             model="gemini-2.5-flash",
             contents=[
-                types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"),
+                types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
                 "Transmute this object into an alchemical game card."
             ],
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
-                response_schema=GameCard,
+                response_schema=GeminiGameCard,
                 system_instruction=system_instruction,
                 temperature=0.2
             )
@@ -245,8 +261,24 @@ async def transmute_image_to_card(image_bytes: bytes, filename: str) -> GameCard
         card_json = response.text
         logger.info(f"Received raw JSON response: {card_json}")
         
-        # Parse into Pydantic model
-        card = GameCard.model_validate_json(card_json)
+        # Parse into GeminiGameCard model
+        g_card = GeminiGameCard.model_validate_json(card_json)
+        
+        # Convert to GameCard
+        card = GameCard(
+            card_name=g_card.card_name,
+            element=g_card.element,
+            base_stats=CardStats(health=g_card.health, attack=g_card.attack, speed=g_card.speed),
+            ability_name=g_card.ability_name,
+            effect_type=g_card.effect_type,
+            value=g_card.value,
+            lore=g_card.lore,
+            uniqueness_score=g_card.uniqueness_score,
+            uniqueness_reason=g_card.uniqueness_reason,
+            sub_element=g_card.sub_element,
+            rarity=g_card.rarity,
+            imagen_prompt=g_card.imagen_prompt if g_card.imagen_prompt else None
+        )
         
         # Ensure stats are balanced
         balanced = balance_stats(card.base_stats)
@@ -362,7 +394,7 @@ async def fuse_cards(card1: GameCard, card2: GameCard, filename_seed: str) -> Ga
             contents="Perform the alchemical fusion.",
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
-                response_schema=GameCard,
+                response_schema=GeminiGameCard,
                 system_instruction=fusion_instruction,
                 temperature=0.4
             )
@@ -371,7 +403,24 @@ async def fuse_cards(card1: GameCard, card2: GameCard, filename_seed: str) -> Ga
         card_json = response.text
         logger.info(f"Received fusion raw JSON: {card_json}")
         
-        fused_card = GameCard.model_validate_json(card_json)
+        # Parse into GeminiGameCard model
+        g_fused = GeminiGameCard.model_validate_json(card_json)
+        
+        # Convert to GameCard
+        fused_card = GameCard(
+            card_name=g_fused.card_name,
+            element=g_fused.element,
+            base_stats=CardStats(health=g_fused.health, attack=g_fused.attack, speed=g_fused.speed),
+            ability_name=g_fused.ability_name,
+            effect_type=g_fused.effect_type,
+            value=g_fused.value,
+            lore=g_fused.lore,
+            uniqueness_score=g_fused.uniqueness_score,
+            uniqueness_reason=g_fused.uniqueness_reason,
+            sub_element=g_fused.sub_element,
+            rarity=g_fused.rarity,
+            imagen_prompt=g_fused.imagen_prompt if g_fused.imagen_prompt else None
+        )
         
         # Ensure fused stats are balanced to 270
         fused_card.base_stats = balance_stats(fused_card.base_stats, target_sum=270)

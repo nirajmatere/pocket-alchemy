@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-const HOST_IP = '10.234.56.215'; // Fallback for native Capacitor wrappers
+const HOST_IP = 'https://pocket-alchemy-backend-665383661867.asia-northeast1.run.app'; // Live backend URL
 
 const getHostIp = () => {
   return localStorage.getItem('pocket_alchemy_backend_ip') || HOST_IP;
@@ -9,21 +9,25 @@ const getHostIp = () => {
 const getApiBase = () => {
   const host = getHostIp();
   if (typeof window === 'undefined') return `http://${host}:8000`;
-  
+
+  const hn = window.location.hostname;
+  // Dynamic live origin fallback for web deployments
+  if (hn && hn !== 'localhost' && hn !== '127.0.0.1' && !window.Capacitor) {
+    return window.location.origin;
+  }
+
   if (host.startsWith('http://') || host.startsWith('https://')) {
     return host;
   }
-  
-  const hn = window.location.hostname;
-  
+
   if (localStorage.getItem('pocket_alchemy_backend_ip') || window.Capacitor) {
     return `http://${host}:8000`;
   }
-  
+
   if (hn === '' || hn === 'localhost' && window.location.port === '') {
     return `http://${host}:8000`;
   }
-  
+
   if (window.location.port === '5173') {
     return `${window.location.protocol}//${window.location.hostname}:8000`;
   }
@@ -33,22 +37,26 @@ const getApiBase = () => {
 const getWsBase = () => {
   const host = getHostIp();
   if (typeof window === 'undefined') return `ws://${host}:8000`;
-  
+
+  const hn = window.location.hostname;
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  // Dynamic live WebSocket fallback for web deployments
+  if (hn && hn !== 'localhost' && hn !== '127.0.0.1' && !window.Capacitor) {
+    return `${protocol}//${window.location.host}`;
+  }
+
   if (host.startsWith('http://') || host.startsWith('https://')) {
     return host.replace('http://', 'ws://').replace('https://', 'wss://');
   }
-  
-  const hn = window.location.hostname;
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  
+
   if (localStorage.getItem('pocket_alchemy_backend_ip') || window.Capacitor) {
     return `ws://${host}:8000`;
   }
-  
+
   if (hn === '' || hn === 'localhost' && window.location.port === '') {
     return `ws://${host}:8000`;
   }
-  
+
   if (window.location.port === '5173') {
     return `${protocol}//${window.location.hostname}:8000`;
   }
@@ -57,6 +65,16 @@ const getWsBase = () => {
 
 const API_BASE = getApiBase();
 const WS_BASE = getWsBase();
+
+const resolveImageUrl = (cardOrFighter) => {
+  if (!cardOrFighter) return '';
+  const url = cardOrFighter.image_art_url || cardOrFighter.image_url;
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
+  }
+  return `${API_BASE}${url}`;
+};
 
 export default function App() {
   const [clientId] = useState(() => {
@@ -73,14 +91,14 @@ export default function App() {
   const [healthStatus, setHealthStatus] = useState({ status: 'unknown', gemini_api_configured: false });
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [backendIpInput, setBackendIpInput] = useState(getHostIp());
-  
+
   // Transmutation / Camera States
   const [isUploading, setIsUploading] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
   const [newlyTransmutedCard, setNewlyTransmutedCard] = useState(null);
   const [cameraStream, setCameraStream] = useState(null);
   const [cameraError, setCameraError] = useState(false);
-  
+
   // Lobby / Matchmaking States
   const [selectedCard, setSelectedCard] = useState(null);
   const [isPvp, setIsPvp] = useState(false);
@@ -89,7 +107,7 @@ export default function App() {
   const [joinRoomCode, setJoinRoomCode] = useState('');
   const [showMatchmakingModal, setShowMatchmakingModal] = useState(false);
   const [pvpWaiting, setPvpWaiting] = useState(false);
-  
+
   // Room / Lobby States
   const [roomState, setRoomState] = useState(null);
   const [incomingChallenge, setIncomingChallenge] = useState(null);
@@ -202,10 +220,10 @@ export default function App() {
     setHintLoading(true);
     setHintText(null);
     try {
-      const res = await fetch(`${API_BASE}/api/battle/hint`, { 
-        method: 'POST', 
+      const res = await fetch(`${API_BASE}/api/battle/hint`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ client_id: clientId, lobby_id: lobbyId }) 
+        body: JSON.stringify({ client_id: clientId, lobby_id: lobbyId })
       });
       const data = await res.json();
       if (res.ok) {
@@ -350,7 +368,7 @@ export default function App() {
 
   const fetchInventory = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/cards`);
+      const res = await fetch(`${API_BASE}/api/cards?client_id=${clientId}`);
       if (res.ok) {
         const data = await res.json();
         setCards(data);
@@ -418,7 +436,7 @@ export default function App() {
     setIsUploading(true);
     setNewlyTransmutedCard(null);
     setStatusMessage('Initiating alchemical extraction pipeline...');
-    
+
     const stages = [
       'Reading visual metadata & color signatures...',
       'Synthesizing structural materials (checking density)...',
@@ -427,7 +445,7 @@ export default function App() {
       'Forging card element and elemental abilities...',
       'Summoning card to inventory...'
     ];
-    
+
     let stageIdx = 0;
     const interval = setInterval(() => {
       if (stageIdx < stages.length) {
@@ -438,6 +456,7 @@ export default function App() {
 
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('client_id', clientId);
 
     try {
       const res = await fetch(`${API_BASE}/api/transmute`, {
@@ -480,11 +499,11 @@ export default function App() {
       const res = await fetch(`${API_BASE}/api/campaign/fight`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          client_id: clientId, 
-          card_name: selectedCard.card_name, 
-          image_url: selectedCard.image_url || '', 
-          stage: profile?.unlocked_campaign_stage || 1 
+        body: JSON.stringify({
+          client_id: clientId,
+          card_name: selectedCard.card_name,
+          image_url: selectedCard.image_url || '',
+          stage: profile?.unlocked_campaign_stage || 1
         }),
       });
 
@@ -510,7 +529,12 @@ export default function App() {
       const res = await fetch(`${API_BASE}/api/battle/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ card_name: selectedCard.card_name, is_pvp: false, image_url: selectedCard.image_url || '' }),
+        body: JSON.stringify({
+          client_id: clientId,
+          card_name: selectedCard.card_name,
+          is_pvp: false,
+          image_url: selectedCard.image_url || ''
+        }),
       });
 
       if (res.ok) {
@@ -535,11 +559,11 @@ export default function App() {
       const res = await fetch(`${API_BASE}/api/battle/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           client_id: clientId,
-          card_name: myCard.card_name, 
+          card_name: myCard.card_name,
           image_url: myCard.image_url || '',
-          is_pvp: false, 
+          is_pvp: false,
           opponent_card: enemyCard
         }),
       });
@@ -564,7 +588,12 @@ export default function App() {
       const res = await fetch(`${API_BASE}/api/battle/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ card_name: selectedCard.card_name, is_pvp: true, image_url: selectedCard.image_url || '' }),
+        body: JSON.stringify({
+          client_id: clientId,
+          card_name: selectedCard.card_name,
+          is_pvp: true,
+          image_url: selectedCard.image_url || ''
+        }),
       });
 
       if (res.ok) {
@@ -656,8 +685,8 @@ export default function App() {
   const sendBattleAction = (combatMove) => {
     if (socket && socket.readyState === WebSocket.OPEN) {
       setActionLocked(true);
-      socket.send(JSON.stringify({ 
-        action: "battle_action", 
+      socket.send(JSON.stringify({
+        action: "battle_action",
         combat_move: combatMove,
         stance: selectedStance
       }));
@@ -683,7 +712,7 @@ export default function App() {
   // Align active fighters based on player index
   const getFightersForDisplay = () => {
     if (!battleState) return { me: null, opponent: null, isSpectator: false };
-    
+
     if (!roomState || !roomState.is_pvp) {
       return {
         me: battleState.player1,
@@ -691,7 +720,7 @@ export default function App() {
         isSpectator: false
       };
     }
-    
+
     if (battleState.player1_id === clientId) {
       return {
         me: battleState.player1,
@@ -834,9 +863,8 @@ export default function App() {
                     }
                   }}
                   disabled={activeView === 'battle'}
-                  className={`px-3 py-1.5 rounded-lg font-mono text-xs font-semibold transition-all border ${
-                    activeView === tab.view ? tab.activeColor : `bg-transparent text-slate-400 ${tab.color} disabled:opacity-40`
-                  }`}
+                  className={`px-3 py-1.5 rounded-lg font-mono text-xs font-semibold transition-all border ${activeView === tab.view ? tab.activeColor : `bg-transparent text-slate-400 ${tab.color} disabled:opacity-40`
+                    }`}
                 >
                   [{tab.label}]
                 </button>
@@ -846,22 +874,20 @@ export default function App() {
 
           {/* Connection status pills */}
           <div className="flex gap-2 text-xs font-mono">
-            <button 
+            <button
               onClick={() => setShowSettingsModal(true)}
-              className={`px-2 py-1 rounded border transition-all cursor-pointer hover:brightness-110 active:scale-95 ${
-                healthStatus.status === 'healthy' 
-                  ? 'bg-green-500/10 text-green-400 border-green-500/30' 
+              className={`px-2 py-1 rounded border transition-all cursor-pointer hover:brightness-110 active:scale-95 ${healthStatus.status === 'healthy'
+                  ? 'bg-green-500/10 text-green-400 border-green-500/30'
                   : 'bg-red-500/10 text-red-400 border-red-500/30 shadow-[0_0_10px_rgba(239,68,68,0.2)]'
-              }`}
+                }`}
               title="Click to configure backend IP address"
             >
               CORE: {healthStatus.status === 'healthy' ? 'ONLINE' : 'OFFLINE ⚙️'}
             </button>
-            <span className={`px-2 py-1 rounded border ${
-              healthStatus.gemini_api_configured 
-                ? 'bg-purple-500/10 text-purple-400 border-purple-500/30' 
+            <span className={`px-2 py-1 rounded border ${healthStatus.gemini_api_configured
+                ? 'bg-purple-500/10 text-purple-400 border-purple-500/30'
                 : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
-            }`}>
+              }`}>
               GEMINI API: {healthStatus.gemini_api_configured ? 'CONNECTED' : 'LOCAL FALLBACK'}
             </span>
           </div>
@@ -873,7 +899,7 @@ export default function App() {
         <div className="flex-1 flex flex-col lg:flex-row gap-6 items-stretch">
           {/* Live Camera Box */}
           <div className="flex-1 flex flex-col">
-            <div 
+            <div
               className="flex-1 min-h-[350px] cyber-glass rounded-2xl border border-white/10 flex flex-col items-center justify-center p-4 relative overflow-hidden group shadow-2xl"
             >
               {/* Scanline Animation during upload */}
@@ -884,18 +910,18 @@ export default function App() {
                 <div className="w-full h-full flex flex-col items-center justify-center relative overflow-hidden bg-black/60 p-6 min-h-[350px]">
                   {/* Lightning overlay that flashes */}
                   <div className="absolute inset-0 animate-lightning-overlay pointer-events-none z-0" />
-                  
+
                   {/* Sparks rising */}
                   <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
                     {[...Array(12)].map((_, i) => (
-                      <div 
-                        key={i} 
-                        className="absolute bottom-0 w-1.5 h-1.5 rounded-full bg-cyber-blue animate-spark" 
+                      <div
+                        key={i}
+                        className="absolute bottom-0 w-1.5 h-1.5 rounded-full bg-cyber-blue animate-spark"
                         style={{
                           left: `${15 + Math.random() * 70}%`,
                           animationDelay: `${Math.random() * 3}s`,
                           animationDuration: `${3 + Math.random() * 2}s`
-                        }} 
+                        }}
                       />
                     ))}
                   </div>
@@ -908,7 +934,7 @@ export default function App() {
                       <polygon points="50,5 90,80 10,80" fill="none" stroke="currentColor" strokeWidth="0.75" />
                       <polygon points="50,95 90,20 10,20" fill="none" stroke="currentColor" strokeWidth="0.75" />
                     </svg>
-                    
+
                     {/* Outer Alchemy Circle */}
                     <svg className="absolute w-48 h-48 text-cyber-blue/50 animate-spin-slow" viewBox="0 0 100 100">
                       <circle cx="50" cy="50" r="48" fill="none" stroke="currentColor" strokeWidth="1.5" />
@@ -916,7 +942,7 @@ export default function App() {
                       <path d="M 50 2 A 48 48 0 0 1 98 50" fill="none" stroke="currentColor" strokeWidth="2" />
                       <path d="M 50 98 A 48 48 0 0 1 2 50" fill="none" stroke="currentColor" strokeWidth="2" />
                     </svg>
-                    
+
                     {/* Wizard SVG Silhouette */}
                     <svg className="w-32 h-32 text-cyber-purple drop-shadow-[0_0_10px_rgba(157,78,221,0.6)]" viewBox="0 0 64 64" fill="currentColor">
                       <path d="M32 4 L22 28 L42 28 Z" />
@@ -947,15 +973,15 @@ export default function App() {
                   <p className="text-slate-400 text-xs leading-relaxed mb-6">
                     In-app browser stream requires SSL/HTTPS camera permissions. Launch your device's native alchemical lens instead.
                   </p>
-                  
+
                   <label className="px-6 py-3 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 text-black font-semibold font-mono text-sm uppercase hover:brightness-110 cursor-pointer transition-all">
                     Activate Mobile Camera
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      capture="environment" 
-                      onChange={handleMobileCameraInput} 
-                      className="hidden" 
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={handleMobileCameraInput}
+                      className="hidden"
                     />
                   </label>
                 </div>
@@ -970,11 +996,11 @@ export default function App() {
                     <div className="absolute bottom-0 right-0 w-4 h-4 border-b border-r border-cyber-blue" />
                   </div>
 
-                  <video 
-                    ref={videoRef} 
-                    autoPlay 
-                    playsInline 
-                    muted 
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
                     className="w-full h-full object-cover rounded-xl bg-black"
                   />
                   <canvas ref={canvasRef} className="hidden" />
@@ -1063,11 +1089,11 @@ export default function App() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 justify-items-center">
               {cards.map((card, idx) => (
-                <TradingCard 
-                  key={idx} 
-                  card={card} 
-                  onAction={() => selectCardForArena(card)} 
-                  actionLabel="SUMMON TO ARENA" 
+                <TradingCard
+                  key={idx}
+                  card={card}
+                  onAction={() => selectCardForArena(card)}
+                  actionLabel="SUMMON TO ARENA"
                 />
               ))}
             </div>
@@ -1086,10 +1112,10 @@ export default function App() {
                 <p className="text-sm font-semibold font-mono text-slate-100 mt-0.5">{dailyQuest.description}</p>
               </div>
               <div className="text-2xl animate-bounce-slow">
-                {dailyQuest.element === 'Fire' ? '🔥' : 
-                 dailyQuest.element === 'Water' ? '💧' : 
-                 dailyQuest.element === 'Lightning' ? '⚡' : 
-                 dailyQuest.element === 'Earth' ? '🌿' : '🔮'}
+                {dailyQuest.element === 'Fire' ? '🔥' :
+                  dailyQuest.element === 'Water' ? '💧' :
+                    dailyQuest.element === 'Lightning' ? '⚡' :
+                      dailyQuest.element === 'Earth' ? '🌿' : '🔮'}
               </div>
             </div>
           )}
@@ -1122,13 +1148,12 @@ export default function App() {
                           <td className="py-2.5 pl-2 font-bold text-cyber-purple">{idx + 1}</td>
                           <td className="py-2.5 font-semibold text-slate-100">{item.card_name}</td>
                           <td className="py-2.5">
-                            <span className={`px-1.5 py-0.5 rounded border text-[9px] font-bold ${
-                              item.element === 'Fire' ? 'bg-red-500/10 text-red-400 border-red-500/30' :
-                              item.element === 'Water' ? 'bg-blue-500/10 text-blue-400 border-blue-500/30' :
-                              item.element === 'Lightning' ? 'bg-purple-500/10 text-purple-400 border-purple-500/30' :
-                              item.element === 'Earth' ? 'bg-green-500/10 text-green-400 border-green-500/30' :
-                              'bg-slate-500/10 text-slate-400 border-slate-500/30'
-                            }`}>
+                            <span className={`px-1.5 py-0.5 rounded border text-[9px] font-bold ${item.element === 'Fire' ? 'bg-red-500/10 text-red-400 border-red-500/30' :
+                                item.element === 'Water' ? 'bg-blue-500/10 text-blue-400 border-blue-500/30' :
+                                  item.element === 'Lightning' ? 'bg-purple-500/10 text-purple-400 border-purple-500/30' :
+                                    item.element === 'Earth' ? 'bg-green-500/10 text-green-400 border-green-500/30' :
+                                      'bg-slate-500/10 text-slate-400 border-slate-500/30'
+                              }`}>
                               {item.element.toUpperCase()}
                             </span>
                           </td>
@@ -1197,26 +1222,25 @@ export default function App() {
             <h2 className="text-xl font-bold font-mono text-amber-400 uppercase tracking-wider">🏆 Badges Vault</h2>
             <p className="text-xs text-slate-400 mt-1">Unlock prestigious titles by progressing through solo campaign boss nodes.</p>
           </div>
-          
+
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {[
               { id: 'acolyte', name: 'Acolyte Alchemist', description: 'Reach Campaign Stage 3.', icon: '🎖️', color: 'text-cyber-purple', glow: 'shadow-[0_0_15px_rgba(157,78,221,0.4)]' },
               { id: 'master', name: 'Forge Master', description: 'Reach Campaign Stage 6.', icon: '🛡️', color: 'text-cyber-blue', glow: 'shadow-[0_0_15px_rgba(0,240,255,0.4)]' },
               { id: 'adept', name: 'Divine Adept', description: 'Reach Campaign Stage 10.', icon: '👑', color: 'text-cyber-yellow', glow: 'shadow-[0_0_15px_rgba(255,251,0,0.4)]' }
             ].map((badge) => {
-              const isUnlocked = profile?.badges?.includes(badge.name) || 
-                (badge.id === 'acolyte' && profile?.unlocked_campaign_stage > 3) || 
-                (badge.id === 'master' && profile?.unlocked_campaign_stage > 6) || 
+              const isUnlocked = profile?.badges?.includes(badge.name) ||
+                (badge.id === 'acolyte' && profile?.unlocked_campaign_stage > 3) ||
+                (badge.id === 'master' && profile?.unlocked_campaign_stage > 6) ||
                 (badge.id === 'adept' && profile?.unlocked_campaign_stage > 10);
-              
+
               return (
-                <div 
-                  key={badge.id} 
-                  className={`cyber-glass border rounded-2xl p-6 flex flex-col items-center text-center transition-all duration-300 ${
-                    isUnlocked 
-                      ? `border-white/20 bg-black/60 ${badge.glow}` 
+                <div
+                  key={badge.id}
+                  className={`cyber-glass border rounded-2xl p-6 flex flex-col items-center text-center transition-all duration-300 ${isUnlocked
+                      ? `border-white/20 bg-black/60 ${badge.glow}`
                       : 'border-white/5 bg-black/20 opacity-40 grayscale'
-                  }`}
+                    }`}
                 >
                   <span className="text-5xl">{badge.icon}</span>
                   <h3 className={`font-mono text-base font-bold uppercase mt-3 ${isUnlocked ? badge.color : 'text-slate-500'}`}>
@@ -1240,7 +1264,7 @@ export default function App() {
             <h2 className="text-xl font-bold font-mono text-cyber-yellow uppercase tracking-wider">🔥 Today's Alchemical Feed</h2>
             <p className="text-xs text-slate-400 mt-1">Discover the latest cards forged in the crucible today. Challenge any card using your vault summons!</p>
           </div>
-          
+
           {todayFeed.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center text-center p-12 cyber-glass rounded-2xl border border-white/5 min-h-[400px]">
               <span className="text-5xl text-slate-700 mb-4">🌪️</span>
@@ -1252,14 +1276,14 @@ export default function App() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 justify-items-center">
               {todayFeed.map((card, idx) => (
-                <TradingCard 
-                  key={idx} 
-                  card={card} 
+                <TradingCard
+                  key={idx}
+                  card={card}
                   onAction={() => {
                     setChallengerTargetOpponent(card);
                     setShowFighterSelectorModal(true);
-                  }} 
-                  actionLabel="⚔️ CHALLENGE SUMMON" 
+                  }}
+                  actionLabel="⚔️ CHALLENGE SUMMON"
                 />
               ))}
             </div>
@@ -1270,7 +1294,7 @@ export default function App() {
       {/* VIEW 3: BATTLE ARENA */}
       {activeView === 'battle' && battleState && me && (
         <div className="flex-1 flex flex-col gap-3 justify-between overflow-hidden relative">
-          
+
           {/* Sequential Animated Battle Log Overlay */}
           {displayedLog && (
             <div className="absolute inset-x-4 top-1/3 z-40 pointer-events-none flex justify-center items-center">
@@ -1308,7 +1332,7 @@ export default function App() {
 
           {/* Combatants 3-Column Arena Grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-stretch flex-1 min-h-0 overflow-y-auto md:overflow-hidden">
-            
+
             {/* COLUMN 1: Player Card Details */}
             <div className={`cyber-glass border border-white/10 rounded-xl p-4 flex flex-col justify-between relative overflow-hidden transition-all duration-300 ${myAnimClass}`}>
               <div className="flex justify-between items-center mb-2 text-xs text-cyber-purple font-mono uppercase tracking-wider">
@@ -1321,30 +1345,29 @@ export default function App() {
               {/* Floating Popups Overlay */}
               <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-30">
                 {popups.filter(p => p.target === 'me').map(p => (
-                  <span 
-                    key={p.id} 
-                    className={`damage-popup absolute text-4xl font-extrabold font-mono tracking-wider ${
-                      p.type === 'damage' ? 'text-red-500 drop-shadow-[0_0_12px_rgba(239,68,68,0.8)]' :
-                      p.type === 'heal' ? 'text-green-400 drop-shadow-[0_0_12px_rgba(74,222,128,0.8)]' :
-                      'text-cyber-blue drop-shadow-[0_0_12px_rgba(0,240,255,0.8)]'
-                    }`}
+                  <span
+                    key={p.id}
+                    className={`damage-popup absolute text-4xl font-extrabold font-mono tracking-wider ${p.type === 'damage' ? 'text-red-500 drop-shadow-[0_0_12px_rgba(239,68,68,0.8)]' :
+                        p.type === 'heal' ? 'text-green-400 drop-shadow-[0_0_12px_rgba(74,222,128,0.8)]' :
+                          'text-cyber-blue drop-shadow-[0_0_12px_rgba(0,240,255,0.8)]'
+                      }`}
                   >
                     {p.text}
                   </span>
                 ))}
               </div>
-              
+
               {me.shield_active && (
                 <div className="absolute inset-0 border-2 border-cyber-blue animate-pulse rounded-xl pointer-events-none z-10" />
               )}
 
               {/* Card Art Image Frame */}
               <div className="w-full h-44 rounded-lg bg-black/60 flex items-center justify-center overflow-hidden border border-white/5 relative mb-3">
-                {me.image_url ? (
-                  <img 
-                    src={`${API_BASE}${me.image_url}`} 
-                    alt={me.card_name} 
-                    className="w-full h-full object-cover" 
+                {resolveImageUrl(me) ? (
+                  <img
+                    src={resolveImageUrl(me)}
+                    alt={me.card_name}
+                    className="w-full h-full object-cover"
                   />
                 ) : (
                   <AlchemicalPlaceholder element={me.element} className="border-none bg-transparent" />
@@ -1362,7 +1385,7 @@ export default function App() {
                   <span className="font-bold text-white">{me.current_health}/{me.max_health} HP</span>
                 </div>
                 <div className="w-full bg-slate-950/80 h-3 rounded-full overflow-hidden border border-white/5 p-[2px]">
-                  <div 
+                  <div
                     style={{ width: `${(me.current_health / me.max_health) * 100}%` }}
                     className="h-full rounded-full bg-gradient-to-r from-cyber-purple to-cyber-blue transition-all duration-500 shadow-[0_0_8px_#9d4edd]"
                   />
@@ -1372,11 +1395,10 @@ export default function App() {
               {/* Fighter Stance Badge */}
               <div className="flex items-center justify-between bg-black/40 p-2 rounded-lg border border-white/5 font-mono text-xs">
                 <span className="text-slate-400 text-[10px] uppercase font-bold">Active Stance:</span>
-                <span className={`px-2 py-0.5 rounded font-bold uppercase text-[10px] ${
-                  me.stance === 'aggressive' ? 'bg-cyber-pink/20 text-cyber-pink border border-cyber-pink/40 shadow-[0_0_8px_rgba(255,0,127,0.3)]' :
-                  me.stance === 'defensive' ? 'bg-cyber-green/20 text-cyber-green border border-cyber-green/40 shadow-[0_0_8px_rgba(57,255,20,0.3)]' :
-                  'bg-cyber-blue/20 text-cyber-blue border border-cyber-blue/40 shadow-[0_0_8px_rgba(0,240,255,0.3)]'
-                }`}>
+                <span className={`px-2 py-0.5 rounded font-bold uppercase text-[10px] ${me.stance === 'aggressive' ? 'bg-cyber-pink/20 text-cyber-pink border border-cyber-pink/40 shadow-[0_0_8px_rgba(255,0,127,0.3)]' :
+                    me.stance === 'defensive' ? 'bg-cyber-green/20 text-cyber-green border border-cyber-green/40 shadow-[0_0_8px_rgba(57,255,20,0.3)]' :
+                      'bg-cyber-blue/20 text-cyber-blue border border-cyber-blue/40 shadow-[0_0_8px_rgba(0,240,255,0.3)]'
+                  }`}>
                   {me.stance || 'FOCUSED'}
                 </span>
               </div>
@@ -1384,15 +1406,15 @@ export default function App() {
 
             {/* COLUMN 2: Comparative metrics & Mascot Comments & Chronos hint */}
             <div className="flex flex-col gap-3 justify-between flex-1 min-h-0 bg-slate-950/30 border border-white/5 rounded-xl p-3 overflow-y-auto retro-scroll">
-              
+
               {/* Referee Mascot */}
               <div className="flex items-start gap-3 bg-black/60 border border-white/10 p-3 rounded-xl relative shadow-[inset_0_0_10px_rgba(255,255,255,0.05)]">
                 <div className="w-12 h-12 rounded-lg bg-cyber-purple/20 border border-cyber-purple/40 flex items-center justify-center text-2xl shrink-0 animate-mascot-referee overflow-hidden">
-                  <img 
-                    src="/mascot.png" 
+                  <img
+                    src="/mascot.png"
                     onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }}
-                    alt="Mascot" 
-                    className="w-full h-full object-cover" 
+                    alt="Mascot"
+                    className="w-full h-full object-cover"
                   />
                   <span style={{ display: 'none' }}>🐹</span>
                 </div>
@@ -1411,14 +1433,14 @@ export default function App() {
                     <span className="font-bold text-white uppercase tracking-wider text-[9px]">ATTACK COMPARISON</span>
                     <span>OPPONENT ATK: <b className="text-red-400">{opponent.attack}</b></span>
                   </div>
-                  
+
                   <div className="flex h-5 w-full bg-slate-950 rounded-lg overflow-hidden border border-white/5 p-0.5 relative">
-                    <div 
+                    <div
                       style={{ width: `${(me.attack / (me.attack + opponent.attack || 1)) * 100}%` }}
                       className="h-full bg-gradient-to-r from-cyber-purple to-cyber-blue rounded-l shadow-[0_0_8px_rgba(157,78,221,0.5)] transition-all duration-500"
                     />
                     <div className="w-[2px] bg-white z-10 h-full absolute left-1/2 transform -translate-x-1/2" />
-                    <div 
+                    <div
                       style={{ width: `${(opponent.attack / (me.attack + opponent.attack || 1)) * 100}%` }}
                       className="h-full bg-gradient-to-r from-amber-500 to-red-500 rounded-r shadow-[0_0_8px_rgba(239,68,68,0.5)] transition-all duration-500 ml-auto"
                     />
@@ -1432,14 +1454,14 @@ export default function App() {
                     <span className="font-bold text-white uppercase tracking-wider text-[9px]">SPEED COMPARISON</span>
                     <span>OPPONENT SPD: <b className="text-amber-400">{opponent.speed}</b></span>
                   </div>
-                  
+
                   <div className="flex h-5 w-full bg-slate-950 rounded-lg overflow-hidden border border-white/5 p-0.5 relative">
-                    <div 
+                    <div
                       style={{ width: `${(me.speed / (me.speed + opponent.speed || 1)) * 100}%` }}
                       className="h-full bg-gradient-to-r from-cyber-blue to-teal-400 rounded-l shadow-[0_0_8px_rgba(0,240,255,0.5)] transition-all duration-500"
                     />
                     <div className="w-[2px] bg-white z-10 h-full absolute left-1/2 transform -translate-x-1/2" />
-                    <div 
+                    <div
                       style={{ width: `${(opponent.speed / (me.speed + opponent.speed || 1)) * 100}%` }}
                       className="h-full bg-gradient-to-r from-amber-400 to-red-400 rounded-r shadow-[0_0_8px_rgba(245,158,11,0.5)] transition-all duration-500 ml-auto"
                     />
@@ -1486,13 +1508,12 @@ export default function App() {
               {/* Floating Popups Overlay */}
               <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-30">
                 {popups.filter(p => p.target === 'opp').map(p => (
-                  <span 
-                    key={p.id} 
-                    className={`damage-popup absolute text-4xl font-extrabold font-mono tracking-wider ${
-                      p.type === 'damage' ? 'text-red-500 drop-shadow-[0_0_12px_rgba(239,68,68,0.8)]' :
-                      p.type === 'heal' ? 'text-green-400 drop-shadow-[0_0_12px_rgba(74,222,128,0.8)]' :
-                      'text-cyber-blue drop-shadow-[0_0_12px_rgba(0,240,255,0.8)]'
-                    }`}
+                  <span
+                    key={p.id}
+                    className={`damage-popup absolute text-4xl font-extrabold font-mono tracking-wider ${p.type === 'damage' ? 'text-red-500 drop-shadow-[0_0_12px_rgba(239,68,68,0.8)]' :
+                        p.type === 'heal' ? 'text-green-400 drop-shadow-[0_0_12px_rgba(74,222,128,0.8)]' :
+                          'text-cyber-blue drop-shadow-[0_0_12px_rgba(0,240,255,0.8)]'
+                      }`}
                   >
                     {p.text}
                   </span>
@@ -1505,11 +1526,11 @@ export default function App() {
 
               {/* Card Art Image Frame */}
               <div className="w-full h-44 rounded-lg bg-black/60 flex items-center justify-center overflow-hidden border border-white/5 relative mb-3">
-                {opponent.image_url ? (
-                  <img 
-                    src={`${API_BASE}${opponent.image_url}`} 
-                    alt={opponent.card_name} 
-                    className="w-full h-full object-cover" 
+                {resolveImageUrl(opponent) ? (
+                  <img
+                    src={resolveImageUrl(opponent)}
+                    alt={opponent.card_name}
+                    className="w-full h-full object-cover"
                   />
                 ) : (
                   <AlchemicalPlaceholder element={opponent.element} className="border-none bg-transparent" />
@@ -1527,7 +1548,7 @@ export default function App() {
                   <span className="font-bold text-white">{opponent.current_health}/{opponent.max_health} HP</span>
                 </div>
                 <div className="w-full bg-slate-950/80 h-3 rounded-full overflow-hidden border border-white/5 p-[2px]">
-                  <div 
+                  <div
                     style={{ width: `${(opponent.current_health / opponent.max_health) * 100}%` }}
                     className="h-full rounded-full bg-gradient-to-r from-red-500 to-amber-500 transition-all duration-500 shadow-[0_0_8px_#ef4444]"
                   />
@@ -1537,11 +1558,10 @@ export default function App() {
               {/* Fighter Stance Badge */}
               <div className="flex items-center justify-between bg-black/40 p-2 rounded-lg border border-white/5 font-mono text-xs">
                 <span className="text-slate-400 text-[10px] uppercase font-bold">Active Stance:</span>
-                <span className={`px-2 py-0.5 rounded font-bold uppercase text-[10px] ${
-                  opponent.stance === 'aggressive' ? 'bg-cyber-pink/20 text-cyber-pink border border-cyber-pink/40 shadow-[0_0_8px_rgba(255,0,127,0.3)]' :
-                  opponent.stance === 'defensive' ? 'bg-cyber-green/20 text-cyber-green border border-cyber-green/40 shadow-[0_0_8px_rgba(57,255,20,0.3)]' :
-                  'bg-cyber-blue/20 text-cyber-blue border border-cyber-blue/40 shadow-[0_0_8px_rgba(0,240,255,0.3)]'
-                }`}>
+                <span className={`px-2 py-0.5 rounded font-bold uppercase text-[10px] ${opponent.stance === 'aggressive' ? 'bg-cyber-pink/20 text-cyber-pink border border-cyber-pink/40 shadow-[0_0_8px_rgba(255,0,127,0.3)]' :
+                    opponent.stance === 'defensive' ? 'bg-cyber-green/20 text-cyber-green border border-cyber-green/40 shadow-[0_0_8px_rgba(57,255,20,0.3)]' :
+                      'bg-cyber-blue/20 text-cyber-blue border border-cyber-blue/40 shadow-[0_0_8px_rgba(0,240,255,0.3)]'
+                  }`}>
                   {opponent.stance || 'FOCUSED'}
                 </span>
               </div>
@@ -1552,7 +1572,7 @@ export default function App() {
           {/* Unified Action Buttons Row */}
           {!isSpectator ? (
             <div className="flex flex-col gap-2 shrink-0">
-              
+
               {/* Stance Selector Panel */}
               <div className="bg-black/60 border border-white/10 rounded-xl p-3 flex flex-col gap-2 font-mono">
                 <div className="flex justify-between items-center text-[10px] text-slate-400">
@@ -1569,9 +1589,8 @@ export default function App() {
                       key={st.id}
                       disabled={battleState.game_over || actionLocked}
                       onClick={() => setSelectedStance(st.id)}
-                      className={`py-2 px-1 rounded-lg border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
-                        selectedStance === st.id ? st.color : st.inactive
-                      }`}
+                      className={`py-2 px-1 rounded-lg border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 ${selectedStance === st.id ? st.color : st.inactive
+                        }`}
                     >
                       <span className="text-[11px] font-bold uppercase">{st.name}</span>
                       <span className="text-[7px] text-slate-500 font-semibold">{st.desc}</span>
@@ -1593,11 +1612,10 @@ export default function App() {
                   <button
                     disabled={battleState.game_over || actionLocked || me.ability_cooldown > 0}
                     onClick={() => sendBattleAction('ability')}
-                    className={`py-2.5 rounded-lg font-bold font-mono text-xs uppercase border disabled:opacity-30 cursor-pointer text-center ${
-                      me.ability_cooldown > 0 
-                        ? 'bg-slate-900 border-white/5 text-slate-500' 
+                    className={`py-2.5 rounded-lg font-bold font-mono text-xs uppercase border disabled:opacity-30 cursor-pointer text-center ${me.ability_cooldown > 0
+                        ? 'bg-slate-900 border-white/5 text-slate-500'
                         : 'bg-gradient-to-r from-cyber-purple to-cyber-blue text-black border-cyber-purple'
-                    }`}
+                      }`}
                   >
                     {actionLocked ? 'Locked' : `✨ Ability ${me.ability_cooldown > 0 ? `(${me.ability_cooldown})` : ''}`}
                   </button>
@@ -1688,7 +1706,7 @@ export default function App() {
                 LOBBY CODE: <span className="text-cyber-green font-bold tracking-widest">{lobbyId}</span>
               </p>
             </div>
-            
+
             <div className="flex gap-3">
               <button
                 onClick={quitBattle}
@@ -1707,15 +1725,15 @@ export default function App() {
                   <span>Connected Alchemists</span>
                   <span className="text-xs text-slate-500 normal-case font-normal">{roomState.members.length} active</span>
                 </h3>
-                
+
                 <div className="space-y-4">
                   {roomState.members.map((member) => {
                     const isSelf = member.client_id === clientId;
                     const isCurrentSpectating = roomState.members.find(m => m.client_id === clientId)?.status === 'spectating';
                     const canChallenge = !isSelf && member.status === 'spectating' && isCurrentSpectating;
-                    
+
                     return (
-                      <div 
+                      <div
                         key={member.client_id}
                         className="flex flex-col sm:flex-row sm:items-center justify-between bg-slate-950/60 p-4 rounded-xl border border-white/5 gap-4"
                       >
@@ -1730,20 +1748,19 @@ export default function App() {
                             </p>
                           </div>
                         </div>
-                        
+
                         <div className="flex items-center gap-3 justify-end">
-                          <span className={`px-2.5 py-1 rounded text-xs font-mono uppercase tracking-wider border ${
-                            member.status === 'fighting' 
+                          <span className={`px-2.5 py-1 rounded text-xs font-mono uppercase tracking-wider border ${member.status === 'fighting'
                               ? 'bg-red-500/10 text-red-400 border-red-500/20 animate-pulse'
                               : member.status === 'challenging'
-                              ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                              : member.status === 'challenged'
-                              ? 'bg-cyber-blue/10 text-cyber-blue border-cyber-blue/20'
-                              : 'bg-green-500/10 text-green-400 border-green-500/20'
-                          }`}>
+                                ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                : member.status === 'challenged'
+                                  ? 'bg-cyber-blue/10 text-cyber-blue border-cyber-blue/20'
+                                  : 'bg-green-500/10 text-green-400 border-green-500/20'
+                            }`}>
                             {member.status}
                           </span>
-                          
+
                           {canChallenge && (
                             <button
                               onClick={() => {
@@ -1765,7 +1782,7 @@ export default function App() {
                   })}
                 </div>
               </div>
-              
+
               <div className="mt-6 text-xs text-slate-500 font-mono leading-relaxed bg-black/30 p-3 rounded-lg border border-white/5">
                 💡 <b>How PvP Works:</b> Challenge any <i>spectating</i> player. Once they accept, you will both enter the combat arena. Other players can watch the match.
               </div>
@@ -1777,7 +1794,7 @@ export default function App() {
                 <h3 className="text-sm font-bold font-mono text-slate-200 uppercase tracking-wider mb-4 pb-2 border-b border-white/5">
                   Live Arena Spectating
                 </h3>
-                
+
                 {roomState.active_match ? (
                   <div className="bg-slate-950/60 p-4 rounded-xl border border-white/5 text-center">
                     <span className="text-3xl mb-2 block animate-bounce">⚔️</span>
@@ -1787,7 +1804,7 @@ export default function App() {
                     <p className="text-xs text-slate-300 font-mono mb-4 leading-relaxed">
                       {roomState.active_match.player1.card_name} <span className="text-slate-500">vs</span> {roomState.active_match.player2.card_name}
                     </p>
-                    
+
                     <button
                       onClick={() => {
                         setIsSpectatingActive(true);
@@ -1820,11 +1837,11 @@ export default function App() {
                 <p className="text-xs text-slate-400 font-mono mb-4">
                   Incoming match request inside room lobby
                 </p>
-                
+
                 <p className="text-sm font-semibold text-slate-200 mb-6 font-mono bg-slate-950 p-3 rounded-lg border border-white/5">
                   {incomingChallenge.fromName} challenges you to duel!
                 </p>
-                
+
                 <div className="grid grid-cols-2 gap-4">
                   <button
                     onClick={() => {
@@ -1864,7 +1881,7 @@ export default function App() {
       {showMatchmakingModal && selectedCard && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-40 p-4 backdrop-blur-sm">
           <div className="max-w-md w-full cyber-glass border border-white/10 p-6 rounded-2xl shadow-2xl relative">
-            
+
             <h3 className="text-lg font-bold font-mono uppercase tracking-wider mb-4 border-b border-white/10 pb-2 text-cyber-blue">
               Summon Arena Setup
             </h3>
@@ -1942,9 +1959,9 @@ export default function App() {
                 <div className="border-t border-white/10 pt-4">
                   <span className="text-[10px] text-slate-400 font-mono block mb-2 uppercase">Join Friend's Lobby</span>
                   <div className="flex gap-2">
-                    <input 
-                      type="text" 
-                      placeholder="ENTER ROOM CODE" 
+                    <input
+                      type="text"
+                      placeholder="ENTER ROOM CODE"
                       value={joinRoomCode}
                       onChange={(e) => setJoinRoomCode(e.target.value.toUpperCase())}
                       className="flex-1 bg-slate-950 border border-white/15 rounded-lg px-4 py-2 text-center font-mono tracking-wider font-semibold placeholder:text-slate-600 focus:outline-none focus:border-cyber-blue"
@@ -1985,7 +2002,7 @@ export default function App() {
             <h3 className="text-lg font-bold font-mono uppercase tracking-wider mb-2 text-cyber-purple border-b border-white/5 pb-2">
               Select Your Arena Fighter
             </h3>
-            
+
             <p className="text-[11px] text-slate-400 font-mono mb-4">
               CHALLENGING OPPONENT: <span className="text-cyber-pink font-bold">{challengerTargetOpponent.card_name}</span> ({challengerTargetOpponent.element.toUpperCase()})
             </p>
@@ -2000,8 +2017,8 @@ export default function App() {
                   {cards
                     .filter(c => c.card_name !== challengerTargetOpponent.card_name || (c.image_url && c.image_url !== challengerTargetOpponent.image_url))
                     .map((myCard, idx) => (
-                      <div 
-                        key={idx} 
+                      <div
+                        key={idx}
                         className="bg-black/60 border border-white/10 rounded-xl p-3 flex justify-between items-center hover:border-cyber-purple/40 hover:bg-cyber-purple/5 transition-all group font-mono"
                       >
                         <div className="flex items-center gap-3">
@@ -2009,8 +2026,8 @@ export default function App() {
                           <div className="text-left">
                             <p className="font-bold text-xs uppercase text-slate-200">{myCard.card_name}</p>
                             <p className="text-[9px] text-slate-400">
-                              ATK: <b className="text-cyber-pink">{myCard.base_stats.attack}</b> | 
-                              SPD: <b className="text-cyber-blue">{myCard.base_stats.speed}</b> | 
+                              ATK: <b className="text-cyber-pink">{myCard.base_stats.attack}</b> |
+                              SPD: <b className="text-cyber-blue">{myCard.base_stats.speed}</b> |
                               HP: <b className="text-cyber-purple">{myCard.base_stats.health}</b>
                             </p>
                           </div>
@@ -2042,7 +2059,7 @@ export default function App() {
             <h3 className="text-lg font-bold font-mono uppercase tracking-wider mb-4 border-b border-white/10 pb-2 text-cyber-purple">
               ⚔️ Alchemical Grid Sync ⚔️
             </h3>
-            
+
             <p className="text-slate-400 text-xs font-mono mb-4 leading-relaxed">
               Configure the network IP address of your developer host PC so this mobile app can connect to the alchemy forge backend.
             </p>
@@ -2050,9 +2067,9 @@ export default function App() {
             <div className="space-y-4">
               <div>
                 <label className="text-[10px] text-slate-400 font-mono block mb-1 uppercase">Dev Host IP Address</label>
-                <input 
-                  type="text" 
-                  placeholder="e.g. 192.168.1.15" 
+                <input
+                  type="text"
+                  placeholder="e.g. 192.168.1.15"
                   value={backendIpInput}
                   onChange={(e) => setBackendIpInput(e.target.value)}
                   className="w-full bg-slate-950 border border-white/15 rounded-lg px-4 py-2 text-center font-mono tracking-wider font-semibold placeholder:text-slate-600 focus:outline-none focus:border-cyber-purple"
@@ -2250,11 +2267,11 @@ function TradingCard({ card, onAction, actionLabel }) {
       {/* Card Visual & Name */}
       <div className="card-title-row my-2 relative z-10 flex flex-col gap-2">
         <div className="card-img-frame w-full h-32 rounded-lg bg-black/70 flex items-center justify-center overflow-hidden border border-white/5 relative">
-          {card.image_url ? (
-            <img 
-              src={`${API_BASE}${card.image_url}`} 
-              alt={card.card_name} 
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+          {resolveImageUrl(card) ? (
+            <img
+              src={resolveImageUrl(card)}
+              alt={card.card_name}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
             />
           ) : (
             <AlchemicalPlaceholder element={card.element} className="border-none bg-transparent" />
@@ -2272,7 +2289,7 @@ function TradingCard({ card, onAction, actionLabel }) {
             <span className="text-white font-bold">{card.base_stats.health}</span>
           </div>
           <div className="stat-bar-container w-full bg-black/60 h-1 rounded-full overflow-hidden">
-            <div 
+            <div
               style={{ width: `${(card.base_stats.health / 150) * 100}%` }}
               className="h-full rounded-full bg-cyber-purple"
             />
@@ -2285,7 +2302,7 @@ function TradingCard({ card, onAction, actionLabel }) {
             <span className="text-white font-bold">{card.base_stats.attack}</span>
           </div>
           <div className="stat-bar-container w-full bg-black/60 h-1 rounded-full overflow-hidden">
-            <div 
+            <div
               style={{ width: `${(card.base_stats.attack / 150) * 100}%` }}
               className="h-full rounded-full bg-cyber-pink"
             />
@@ -2298,7 +2315,7 @@ function TradingCard({ card, onAction, actionLabel }) {
             <span className="text-white font-bold">{card.base_stats.speed}</span>
           </div>
           <div className="stat-bar-container w-full bg-black/60 h-1 rounded-full overflow-hidden">
-            <div 
+            <div
               style={{ width: `${(card.base_stats.speed / 150) * 100}%` }}
               className="h-full rounded-full bg-cyber-blue"
             />

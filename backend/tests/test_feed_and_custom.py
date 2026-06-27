@@ -62,3 +62,44 @@ def test_create_battle_with_custom_opponent():
     assert "lobby_id" in res_data
     assert "boss_name" in res_data
     assert res_data["boss_name"] == "Dark Alchemist"
+
+
+def test_user_segregation_local_db():
+    """Verify that inventory retrieval is segregated by client_id in local fallback."""
+    # Save a card for user A
+    card_a = GameCard(
+        card_name="User A Card",
+        element="Fire",
+        base_stats=CardStats(health=100, attack=50, speed=100),
+        ability_name="A Blast",
+        effect_type="damage",
+        value=20,
+        lore="User A card lore"
+    )
+    db_client.save_card("user_a", card_a)
+    
+    # Save a card for user B
+    card_b = GameCard(
+        card_name="User B Card",
+        element="Water",
+        base_stats=CardStats(health=100, attack=50, speed=100),
+        ability_name="B Splash",
+        effect_type="heal",
+        value=20,
+        lore="User B card lore"
+    )
+    db_client.save_card("user_b", card_b)
+    
+    # Retrieve user A's inventory
+    inv_a = db_client.get_inventory("user_a")
+    # Retrieve user B's inventory
+    inv_b = db_client.get_inventory("user_b")
+    
+    names_a = [c["card_name"] for c in inv_a]
+    names_b = [c["card_name"] for c in inv_b]
+    
+    assert "User A Card" in names_a
+    assert "User B Card" not in names_a
+    assert "User B Card" in names_b
+    assert "User A Card" not in names_b
+

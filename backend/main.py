@@ -104,7 +104,8 @@ class AlchemicalDB:
         if os.path.exists(self.local_cards_file):
             try:
                 with open(self.local_cards_file, "r") as f:
-                    return json.load(f)
+                    all_cards = json.load(f)
+                    return [c for c in all_cards if c.get("creator_id", "local_user") == client_id]
             except Exception as e:
                 logger.error(f"Local inventory load error: {e}")
         return []
@@ -130,11 +131,19 @@ class AlchemicalDB:
                 logger.error(f"Firestore save_card error: {e}")
 
         # Local fallback
-        inventory = self.get_inventory(client_id)
-        inventory.append(card_dict)
+        all_cards = []
+        if os.path.exists(self.local_cards_file):
+            try:
+                with open(self.local_cards_file, "r") as f:
+                    all_cards = json.load(f)
+            except Exception as e:
+                logger.error(f"Local inventory load error: {e}")
+        
+        card_dict["creator_id"] = client_id
+        all_cards.append(card_dict)
         try:
             with open(self.local_cards_file, "w") as f:
-                json.dump(inventory, f, indent=2)
+                json.dump(all_cards, f, indent=2)
             logger.info("Card saved to local inventory file.")
         except Exception as e:
             logger.error(f"Local card save error: {e}")
@@ -402,7 +411,8 @@ async def transmute(file: UploadFile = File(...), client_id: str = Form("local_u
         gcs_url = upload_to_gcs(content, unique_filename)
         
         # Transmute image to alchemical card
-        card = await transmute_image_to_card(content, unique_filename)
+        mime_type = file.content_type if file.content_type else "image/jpeg"
+        card = await transmute_image_to_card(content, unique_filename, mime_type)
         card.image_url = gcs_url if gcs_url else f"/uploads/{unique_filename}"
         
         from datetime import datetime

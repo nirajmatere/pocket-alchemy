@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+/* eslint-disable no-unused-vars */
+import { useState, useEffect, useRef } from 'react';
 
 const HOST_IP = 'https://pocket-alchemy-backend-665383661867.asia-northeast1.run.app'; // Live backend URL
 
@@ -75,6 +76,20 @@ const resolveImageUrl = (cardOrFighter) => {
   }
   return `${API_BASE}${url}`;
 };
+const SPARKS = [
+  { left: '25%', delay: '0.2s', duration: '3.5s' },
+  { left: '42%', delay: '1.5s', duration: '4.2s' },
+  { left: '78%', delay: '0.8s', duration: '3.1s' },
+  { left: '19%', delay: '2.1s', duration: '4.8s' },
+  { left: '55%', delay: '1.1s', duration: '3.9s' },
+  { left: '83%', delay: '2.7s', duration: '4.5s' },
+  { left: '33%', delay: '0.4s', duration: '3.7s' },
+  { left: '67%', delay: '1.9s', duration: '4.1s' },
+  { left: '50%', delay: '0.9s', duration: '3.3s' },
+  { left: '72%', delay: '2.3s', duration: '4.6s' },
+  { left: '29%', delay: '1.2s', duration: '3.8s' },
+  { left: '88%', delay: '0.6s', duration: '3.4s' }
+];
 
 export default function App() {
   const [clientId] = useState(() => {
@@ -158,12 +173,17 @@ export default function App() {
   useEffect(() => {
     if (animatedLogQueue.length > 0 && !displayedLog) {
       const nextLog = animatedLogQueue[0];
-      setDisplayedLog(nextLog);
-      setAnimatedLogQueue(prev => prev.slice(1));
       const timer = setTimeout(() => {
+        setDisplayedLog(nextLog);
+        setAnimatedLogQueue(prev => prev.slice(1));
+      }, 0);
+      const hideTimer = setTimeout(() => {
         setDisplayedLog(null);
       }, 2500);
-      return () => clearTimeout(timer);
+      return () => {
+        clearTimeout(timer);
+        clearTimeout(hideTimer);
+      };
     }
   }, [animatedLogQueue, displayedLog]);
 
@@ -251,107 +271,92 @@ export default function App() {
   };
 
   useEffect(() => {
+    let timerId;
     if (!battleState) {
       prevBattleStateRef.current = null;
-      setPopups([]);
-      return;
-    }
-    const prev = prevBattleStateRef.current;
-    prevBattleStateRef.current = battleState;
+      timerId = setTimeout(() => {
+        setPopups([]);
+      }, 0);
+    } else {
+      const prev = prevBattleStateRef.current;
+      prevBattleStateRef.current = battleState;
 
-    if (!prev) return;
+      if (prev) {
+        const newRound = battleState.round_number !== prev.round_number;
+        const gameOverState = battleState.game_over && !prev.game_over;
 
-    const newRound = battleState.round_number !== prev.round_number;
-    const gameOverState = battleState.game_over && !prev.game_over;
+        if (newRound || gameOverState) {
+          timerId = setTimeout(() => {
+            let prevMe;
+            let prevOpp;
+            let currMe;
+            let currOpp;
 
-    if (newRound || gameOverState) {
-      let prevMe = null;
-      let prevOpp = null;
-      let currMe = null;
-      let currOpp = null;
+            if (!roomState || !roomState.is_pvp) {
+              prevMe = prev.player1;
+              prevOpp = prev.player2;
+              currMe = battleState.player1;
+              currOpp = battleState.player2;
+            } else {
+              if (battleState.player1_id === clientId) {
+                prevMe = prev.player1;
+                prevOpp = prev.player2;
+                currMe = battleState.player1;
+                currOpp = battleState.player2;
+              } else {
+                prevMe = prev.player2;
+                prevOpp = prev.player1;
+                currMe = battleState.player2;
+                currOpp = battleState.player1;
+              }
+            }
 
-      if (!roomState || !roomState.is_pvp) {
-        prevMe = prev.player1;
-        prevOpp = prev.player2;
-        currMe = battleState.player1;
-        currOpp = battleState.player2;
-      } else {
-        if (battleState.player1_id === clientId) {
-          prevMe = prev.player1;
-          prevOpp = prev.player2;
-          currMe = battleState.player1;
-          currOpp = battleState.player2;
-        } else {
-          prevMe = prev.player2;
-          prevOpp = prev.player1;
-          currMe = battleState.player2;
-          currOpp = battleState.player1;
+            if (!prevMe || !prevOpp || !currMe || !currOpp) return;
+
+            // Check damage / heal / shield for Me
+            const meHpDiff = currMe.current_health - prevMe.current_health;
+            if (meHpDiff < 0) {
+              setOppAnimClass('animate-strike-left');
+              setTimeout(() => {
+                setMyAnimClass('animate-damage-shake');
+                spawnPopup(`-${Math.abs(meHpDiff)}`, 'damage', 'me');
+              }, 150);
+            } else if (meHpDiff > 0) {
+              spawnPopup(`+${meHpDiff}`, 'heal', 'me');
+            } else if (currMe.shield_active && !prevMe.shield_active) {
+              spawnPopup('SHIELD', 'shield', 'me');
+            }
+
+            // Check damage / heal / shield for Opponent
+            const oppHpDiff = currOpp.current_health - prevOpp.current_health;
+            if (oppHpDiff < 0) {
+              setMyAnimClass('animate-strike-right');
+              setTimeout(() => {
+                setOppAnimClass('animate-damage-shake');
+                spawnPopup(`-${Math.abs(oppHpDiff)}`, 'damage', 'opp');
+              }, 150);
+            } else if (oppHpDiff > 0) {
+              spawnPopup(`+${oppHpDiff}`, 'heal', 'opp');
+            } else if (currOpp.shield_active && !prevOpp.shield_active) {
+              spawnPopup('SHIELD', 'shield', 'opp');
+            }
+
+            setTimeout(() => {
+              setMyAnimClass('');
+              setOppAnimClass('');
+            }, 700);
+          }, 0);
         }
       }
-
-      if (!prevMe || !prevOpp || !currMe || !currOpp) return;
-
-      // Check damage / heal / shield for Me
-      const meHpDiff = currMe.current_health - prevMe.current_health;
-      if (meHpDiff < 0) {
-        setOppAnimClass('animate-strike-left');
-        setTimeout(() => {
-          setMyAnimClass('animate-damage-shake');
-          spawnPopup(`-${Math.abs(meHpDiff)}`, 'damage', 'me');
-        }, 150);
-      } else if (meHpDiff > 0) {
-        spawnPopup(`+${meHpDiff}`, 'heal', 'me');
-      } else if (currMe.shield_active && !prevMe.shield_active) {
-        spawnPopup('SHIELD', 'shield', 'me');
-      }
-
-      // Check damage / heal / shield for Opponent
-      const oppHpDiff = currOpp.current_health - prevOpp.current_health;
-      if (oppHpDiff < 0) {
-        setMyAnimClass('animate-strike-right');
-        setTimeout(() => {
-          setOppAnimClass('animate-damage-shake');
-          spawnPopup(`-${Math.abs(oppHpDiff)}`, 'damage', 'opp');
-        }, 150);
-      } else if (oppHpDiff > 0) {
-        spawnPopup(`+${oppHpDiff}`, 'heal', 'opp');
-      } else if (currOpp.shield_active && !prevOpp.shield_active) {
-        spawnPopup('SHIELD', 'shield', 'opp');
-      }
-
-      setTimeout(() => {
-        setMyAnimClass('');
-        setOppAnimClass('');
-      }, 700);
     }
+    return () => {
+      if (timerId) clearTimeout(timerId);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [battleState]);
 
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
-
-  // Load inventory, health and alchemical leaderboard status on mount
-  useEffect(() => {
-    fetchInventory();
-    checkBackendHealth();
-    fetchDashboardData();
-  }, []);
-
-  // Control HTML5 camera streaming
-  useEffect(() => {
-    if (activeView === 'transmute') {
-      startCamera();
-    } else {
-      stopCamera();
-    }
-    return () => stopCamera();
-  }, [activeView]);
-
-  // Reset action locks when a new round starts
-  useEffect(() => {
-    if (battleState) {
-      setActionLocked(false);
-    }
-  }, [battleState?.round_number]);
 
   const checkBackendHealth = async () => {
     try {
@@ -402,6 +407,44 @@ export default function App() {
       setCameraStream(null);
     }
   };
+
+  // Load inventory, health and alchemical leaderboard status on mount
+  useEffect(() => {
+    let timerId = setTimeout(() => {
+      fetchInventory();
+      checkBackendHealth();
+      fetchDashboardData();
+    }, 0);
+    return () => clearTimeout(timerId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Control HTML5 camera streaming
+  useEffect(() => {
+    let timerId = setTimeout(() => {
+      if (activeView === 'transmute') {
+        startCamera();
+      } else {
+        stopCamera();
+      }
+    }, 0);
+    return () => {
+      clearTimeout(timerId);
+      stopCamera();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeView]);
+
+  // Reset action locks when a new round starts
+  useEffect(() => {
+    if (battleState) {
+      let timerId = setTimeout(() => {
+        setActionLocked(false);
+      }, 0);
+      return () => clearTimeout(timerId);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [battleState?.round_number]);
 
   const captureFrameAndTransmute = () => {
     if (!videoRef.current || !canvasRef.current) return;
@@ -913,14 +956,14 @@ export default function App() {
 
                   {/* Sparks rising */}
                   <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
-                    {[...Array(12)].map((_, i) => (
+                    {SPARKS.map((spark, i) => (
                       <div
                         key={i}
                         className="absolute bottom-0 w-1.5 h-1.5 rounded-full bg-cyber-blue animate-spark"
                         style={{
-                          left: `${15 + Math.random() * 70}%`,
-                          animationDelay: `${Math.random() * 3}s`,
-                          animationDuration: `${3 + Math.random() * 2}s`
+                          left: spark.left,
+                          animationDelay: spark.delay,
+                          animationDuration: spark.duration
                         }}
                       />
                     ))}

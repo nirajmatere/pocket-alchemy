@@ -1,7 +1,7 @@
 export const haptic = (ms = 30) => {
   try {
     if (navigator.vibrate) navigator.vibrate(ms);
-  } catch (_) {}
+  } catch { /* ignore */ }
 };
 
 export const hapticLight = () => haptic(20);

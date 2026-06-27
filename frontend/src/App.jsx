@@ -952,12 +952,12 @@ export default function App() {
     setActiveView('lobby');
   };
 
-  const connectRoomWebSocket = (roomCode, cardToRegister) => {
+  const connectRoomWebSocket = (roomCode, cardToRegister, isHost = false) => {
     if (socket) {
       socket.close();
     }
 
-    const wsUrl = `${WS_BASE}/ws/room/${roomCode}/${clientId}`;
+    const wsUrl = `${WS_BASE}/ws/room/${roomCode}/${clientId}${isHost ? '?host=1' : ''}`;
     const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
@@ -2680,7 +2680,7 @@ export default function App() {
                   const code = generateRoomCode();
                   setIsPvp(true);
                   setLobbyId(code);
-                  connectRoomWebSocket(code, null);
+                  connectRoomWebSocket(code, null, true);
                   setActiveView('lobby');
                 }}
                 className="w-full py-4 rounded-xl bg-gradient-to-r from-cyber-purple to-cyber-blue hover:brightness-110 active:scale-98 font-bold font-mono text-sm uppercase tracking-wider text-black transition-all cursor-pointer shadow-[0_0_15px_rgba(0,240,255,0.3)] text-center"

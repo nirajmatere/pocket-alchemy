@@ -978,14 +978,19 @@ def join_battle(request: BattleJoinRequest):
 # --- WebSockets Room & Battle Loop ---
 
 @app.websocket("/ws/room/{lobby_id}/{client_id}")
-async def websocket_room(websocket: WebSocket, lobby_id: str, client_id: str):
+async def websocket_room(websocket: WebSocket, lobby_id: str, client_id: str, host: int = 0):
     lobby_id = lobby_id.upper()
     session = battle_sessions.get(lobby_id)
     if not session:
-        await websocket.accept()
-        await websocket.send_json({"type": "error", "message": f"Room '{lobby_id}' not found. Please check the code and try again."})
-        await websocket.close()
-        return
+        if host:
+            # Host is opening a brand-new empty PvP lobby; create it so members can register.
+            session = BattleSession(lobby_id, None, is_pvp=True)
+            battle_sessions[lobby_id] = session
+        else:
+            await websocket.accept()
+            await websocket.send_json({"type": "error", "message": f"Room '{lobby_id}' not found. Please check the code and try again."})
+            await websocket.close()
+            return
 
     await websocket.accept()
     

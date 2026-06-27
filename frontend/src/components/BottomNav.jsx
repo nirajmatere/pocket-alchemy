@@ -1,5 +1,6 @@
 import { hapticLight } from '../lib/haptics.js';
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const NAV_ITEMS = [
   { view: 'transmute',    label: 'TRANSMUTE',   short: 'Forge',   icon: '⚗️',  accent: '#9d4edd' },
   { view: 'inventory',   label: 'ALCHEMY VAULT',short: 'Vault',   icon: '🎒',  accent: '#00f0ff' },

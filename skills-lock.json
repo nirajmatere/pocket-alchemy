@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "skills": {
+    "understand": {
+      "source": "Egonex-AI/Understand-Anything",
+      "sourceType": "github",
+      "skillPath": "understand-anything-plugin/skills/understand/SKILL.md",
+      "computedHash": "46eceb289f02c178fd67c2c87b37d10b584a839a9836c503e11f2331462e7006"
+    },
+    "understand-dashboard": {
+      "source": "Egonex-AI/Understand-Anything",
+      "sourceType": "github",
+      "skillPath": "understand-anything-plugin/skills/understand-dashboard/SKILL.md",
+      "computedHash": "32771fb738e732febba2c780df113354fdc08085aee73e6531ded3e0ad17ee29"
+    }
+  }
+}
